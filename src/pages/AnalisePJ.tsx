@@ -5,32 +5,14 @@ import FileDropzone from "@/components/FileDropzone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { extractFromFiles } from "@/lib/extractionService";
 import { PJ_BALANCO_PROMPT, PJ_FATURAMENTO_PROMPT } from "@/lib/pdfExtractor";
 
-const finalidades = [
-  "Capital de giro",
-  "Aquisição de equipamento",
-  "Imóvel",
-  "Veículo",
-  "Outros",
-];
-
 const AnalisePJ = () => {
   const navigate = useNavigate();
-  const [nomeRep, setNomeRep] = useState("");
-  const [cpfRep, setCpfRep] = useState("");
   const [valor, setValor] = useState("");
-  const [finalidade, setFinalidade] = useState("");
   const [prazo, setPrazo] = useState("");
   const [balancosFiles, setBalancosFiles] = useState<File[]>([]);
   const [faturamentoFiles, setFaturamentoFiles] = useState<File[]>([]);
@@ -40,12 +22,8 @@ const AnalisePJ = () => {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!nomeRep.trim()) e.nomeRep = "Informe o nome do representante.";
-    if (!cpfRep.trim() || cpfRep.replace(/\D/g, "").length !== 11)
-      e.cpfRep = "Informe um CPF válido (11 dígitos).";
     const v = parseFloat(valor);
     if (!valor || isNaN(v) || v <= 0) e.valor = "Informe um valor maior que zero.";
-    if (!finalidade) e.finalidade = "Selecione uma finalidade.";
     if (!prazo || parseInt(prazo) <= 0) e.prazo = "Informe um prazo válido.";
     if (balancosFiles.length === 0) e.balancos = "Envie os 3 últimos balanços patrimoniais.";
     if (faturamentoFiles.length === 0) e.faturamento = "Envie o relatório de faturamento.";
@@ -69,7 +47,6 @@ const AnalisePJ = () => {
       ]);
 
       const extractedData = {
-        representante: { nome: nomeRep, cpf: cpfRep },
         balancos: balancoData,
         faturamento: faturamentoData,
       };
@@ -78,7 +55,7 @@ const AnalisePJ = () => {
         state: {
           extractedData,
           tipo: "pj",
-          formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade },
+          formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade: "" },
         },
       });
     } catch (err) {
@@ -100,33 +77,6 @@ const AnalisePJ = () => {
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="nomeRep">Nome do representante legal</Label>
-              <Input
-                id="nomeRep"
-                value={nomeRep}
-                onChange={(e) => setNomeRep(e.target.value)}
-                placeholder="Nome completo"
-                className={errors.nomeRep ? "border-destructive" : ""}
-                disabled={loading}
-              />
-              {errors.nomeRep && <p className="text-xs text-destructive">{errors.nomeRep}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cpfRep">CPF do representante</Label>
-              <Input
-                id="cpfRep"
-                value={cpfRep}
-                onChange={(e) => setCpfRep(e.target.value)}
-                placeholder="000.000.000-00"
-                className={errors.cpfRep ? "border-destructive" : ""}
-                disabled={loading}
-              />
-              {errors.cpfRep && <p className="text-xs text-destructive">{errors.cpfRep}</p>}
-            </div>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="valor">Valor do crédito solicitado (R$)</Label>
             <Input
@@ -140,21 +90,6 @@ const AnalisePJ = () => {
               disabled={loading}
             />
             {errors.valor && <p className="text-xs text-destructive">{errors.valor}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Finalidade do crédito</Label>
-            <Select value={finalidade} onValueChange={setFinalidade} disabled={loading}>
-              <SelectTrigger className={errors.finalidade ? "border-destructive" : ""}>
-                <SelectValue placeholder="Selecione a finalidade" />
-              </SelectTrigger>
-              <SelectContent>
-                {finalidades.map((f) => (
-                  <SelectItem key={f} value={f}>{f}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.finalidade && <p className="text-xs text-destructive">{errors.finalidade}</p>}
           </div>
 
           <div className="space-y-2">
