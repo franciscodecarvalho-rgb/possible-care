@@ -46,7 +46,15 @@ const Resultado = () => {
     }
   }, []);
 
-  const handleExportPDF = async () => {
+  // Auto-export when coming from history with autoExport flag
+  useEffect(() => {
+    if (result && location.state?.autoExport && reportRef.current) {
+      const timer = setTimeout(() => handleExportPDF(), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [result]);
+
+
     if (!reportRef.current || !result) return;
     setExporting(true);
     try {
