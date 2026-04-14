@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText, Home, Download } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { scorePF, type ScoringResult } from "@/lib/creditScoring";
+import { scorePF, scorePJ, type ScoringResult } from "@/lib/creditScoring";
 import { generateAnalysis } from "@/lib/reportAnalysis";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -40,8 +40,19 @@ const Resultado = () => {
     if (tipo === "pf") {
       const r = scorePF(extractedData, formData.valor, formData.prazo, formData.finalidade);
       setResult(r);
+    } else if (tipo === "pj") {
+      const r = scorePJ(extractedData, formData.valor, formData.prazo, formData.finalidade);
+      setResult(r);
     }
   }, []);
+
+  // Auto-export when coming from history with autoExport flag
+  useEffect(() => {
+    if (result && location.state?.autoExport && reportRef.current) {
+      const timer = setTimeout(() => handleExportPDF(), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [result]);
 
   const handleExportPDF = async () => {
     if (!reportRef.current || !result) return;
@@ -174,9 +185,9 @@ const Resultado = () => {
               <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Identificação</p>
               <table style={{ width: "100%", fontSize: "11px" }}>
                 <tbody>
-                  <Row label="Nome" value={ed.nome_completo || "NÃO INFORMADO"} />
-                  <Row label="CPF/CNPJ" value={ed.cpf || ed.cnpj || "NÃO INFORMADO"} />
-                  <Row label="Ocupação" value={ed.ocupacao || "NÃO INFORMADO"} />
+                  <Row label="Nome" value={ed.nome_completo || ed.razao_social || ed.balancos?.razao_social || ed.representante?.nome || "NÃO INFORMADO"} />
+                  <Row label="CPF/CNPJ" value={ed.cpf || ed.cnpj || ed.balancos?.cnpj || ed.faturamento?.cnpj || "NÃO INFORMADO"} />
+                  <Row label={result.tipo === "pj" ? "Representante" : "Ocupação"} value={result.tipo === "pj" ? (ed.representante?.nome || "NÃO INFORMADO") : (ed.ocupacao || "NÃO INFORMADO")} />
                 </tbody>
               </table>
             </div>
