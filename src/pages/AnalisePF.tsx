@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import BackButton from "@/components/BackButton";
 import { extractFromFiles } from "@/lib/extractionService";
 import { IRPF_PROMPT, COMPROVANTE_PROMPT } from "@/lib/pdfExtractor";
 
@@ -69,6 +70,7 @@ const AnalisePF = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto max-w-2xl px-6 py-10">
+        <BackButton to="/" />
         <h1 className="text-2xl font-bold text-foreground">Análise — Pessoa Física</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Preencha os dados e envie os documentos necessários

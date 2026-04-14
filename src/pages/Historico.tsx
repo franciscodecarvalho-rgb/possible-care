@@ -15,6 +15,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Inbox, Eye, Download, Trash2, Filter } from "lucide-react";
+import BackButton from "@/components/BackButton";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -114,6 +115,7 @@ const Historico = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-6 py-10">
+        <BackButton to="/" />
         <h1 className="text-2xl font-bold text-foreground">Histórico de Análises</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Consulte as análises de crédito realizadas

@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowLeft } from "lucide-react";
+import { CheckCircle } from "lucide-react";
+import BackButton from "@/components/BackButton";
 import { toast } from "sonner";
 
 interface SectionProps {
@@ -145,16 +146,12 @@ const Preview = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto max-w-3xl px-6 py-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Preview dos Dados Extraídos</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Confira os dados antes de gerar o relatório
-            </p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-          </Button>
+        <BackButton onClick={() => navigate(-1)} />
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Preview dos Dados Extraídos</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Confira os dados antes de gerar o relatório
+          </p>
         </div>
 
         <div className="mt-8 space-y-6">
