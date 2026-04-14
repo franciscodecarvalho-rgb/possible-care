@@ -12,8 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { extractFromFiles } from "@/lib/extractionService";
+import { PJ_BALANCO_PROMPT, PJ_FATURAMENTO_PROMPT } from "@/lib/pdfExtractor";
 
 const finalidades = [
   "Capital de giro",
@@ -33,6 +35,8 @@ const AnalisePJ = () => {
   const [balancosFiles, setBalancosFiles] = useState<File[]>([]);
   const [faturamentoFiles, setFaturamentoFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [progressMsg, setProgressMsg] = useState("");
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -43,22 +47,41 @@ const AnalisePJ = () => {
     if (!valor || isNaN(v) || v <= 0) e.valor = "Informe um valor maior que zero.";
     if (!finalidade) e.finalidade = "Selecione uma finalidade.";
     if (!prazo || parseInt(prazo) <= 0) e.prazo = "Informe um prazo válido.";
-    if (balancosFiles.length === 0)
-      e.balancos = "Envie os 3 últimos balanços patrimoniais.";
-    if (faturamentoFiles.length === 0)
-      e.faturamento = "Envie o relatório de faturamento.";
+    if (balancosFiles.length === 0) e.balancos = "Envie os 3 últimos balanços patrimoniais.";
+    if (faturamentoFiles.length === 0) e.faturamento = "Envie o relatório de faturamento.";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (ev: React.FormEvent) => {
+  const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!validate()) {
       toast.error("Corrija os campos destacados.");
       return;
     }
-    toast.success("Análise enviada com sucesso!");
-    navigate("/resultado");
+
+    setLoading(true);
+    try {
+      setProgressMsg("Lendo documentos...");
+      const [balancoData, faturamentoData] = await Promise.all([
+        extractFromFiles(balancosFiles, PJ_BALANCO_PROMPT, setProgressMsg),
+        extractFromFiles(faturamentoFiles, PJ_FATURAMENTO_PROMPT),
+      ]);
+
+      const extractedData = {
+        representante: { nome: nomeRep, cpf: cpfRep },
+        balancos: balancoData,
+        faturamento: faturamentoData,
+      };
+
+      navigate("/preview", { state: { extractedData, tipo: "pj" } });
+    } catch (err) {
+      console.error(err);
+      toast.error("Não foi possível processar. Tente novamente.");
+    } finally {
+      setLoading(false);
+      setProgressMsg("");
+    }
   };
 
   return (
@@ -80,6 +103,7 @@ const AnalisePJ = () => {
                 onChange={(e) => setNomeRep(e.target.value)}
                 placeholder="Nome completo"
                 className={errors.nomeRep ? "border-destructive" : ""}
+                disabled={loading}
               />
               {errors.nomeRep && <p className="text-xs text-destructive">{errors.nomeRep}</p>}
             </div>
@@ -91,6 +115,7 @@ const AnalisePJ = () => {
                 onChange={(e) => setCpfRep(e.target.value)}
                 placeholder="000.000.000-00"
                 className={errors.cpfRep ? "border-destructive" : ""}
+                disabled={loading}
               />
               {errors.cpfRep && <p className="text-xs text-destructive">{errors.cpfRep}</p>}
             </div>
@@ -106,13 +131,14 @@ const AnalisePJ = () => {
               value={valor}
               onChange={(e) => setValor(e.target.value)}
               className={errors.valor ? "border-destructive" : ""}
+              disabled={loading}
             />
             {errors.valor && <p className="text-xs text-destructive">{errors.valor}</p>}
           </div>
 
           <div className="space-y-2">
             <Label>Finalidade do crédito</Label>
-            <Select value={finalidade} onValueChange={setFinalidade}>
+            <Select value={finalidade} onValueChange={setFinalidade} disabled={loading}>
               <SelectTrigger className={errors.finalidade ? "border-destructive" : ""}>
                 <SelectValue placeholder="Selecione a finalidade" />
               </SelectTrigger>
@@ -135,6 +161,7 @@ const AnalisePJ = () => {
               value={prazo}
               onChange={(e) => setPrazo(e.target.value)}
               className={errors.prazo ? "border-destructive" : ""}
+              disabled={loading}
             />
             {errors.prazo && <p className="text-xs text-destructive">{errors.prazo}</p>}
           </div>
@@ -147,7 +174,6 @@ const AnalisePJ = () => {
               onFilesChange={setBalancosFiles}
               error={errors.balancos}
             />
-
             <FileDropzone
               label="Relatório de Faturamento dos últimos 12 meses (1 PDF)"
               maxFiles={1}
@@ -165,8 +191,20 @@ const AnalisePJ = () => {
             </p>
           </div>
 
-          <Button type="submit" className="w-full bg-navy text-navy-foreground hover:bg-navy-light" size="lg">
-            Analisar Crédito
+          <Button
+            type="submit"
+            className="w-full bg-navy text-navy-foreground hover:bg-navy-light"
+            size="lg"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                {progressMsg || "Processando..."}
+              </>
+            ) : (
+              "Analisar Crédito"
+            )}
           </Button>
         </form>
       </main>
