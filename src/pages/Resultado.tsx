@@ -54,7 +54,7 @@ const Resultado = () => {
     }
   }, [result]);
 
-
+  const handleExportPDF = async () => {
     if (!reportRef.current || !result) return;
     setExporting(true);
     try {
