@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { extractFromFiles } from "@/lib/extractionService";
+import { IRPF_PROMPT, COMPROVANTE_PROMPT } from "@/lib/pdfExtractor";
 
 const finalidades = [
   "Capital de giro",
@@ -32,6 +35,8 @@ const AnalisePF = () => {
   const [irpfFiles, setIrpfFiles] = useState<File[]>([]);
   const [comprovanteFiles, setComprovanteFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [progressMsg, setProgressMsg] = useState("");
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -47,14 +52,30 @@ const AnalisePF = () => {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
       toast.error("Corrija os campos destacados.");
       return;
     }
-    toast.success("Análise enviada com sucesso!");
-    navigate("/resultado");
+
+    setLoading(true);
+    try {
+      const files = uploadOption === "irpf" ? irpfFiles : comprovanteFiles;
+      const prompt = uploadOption === "irpf" ? IRPF_PROMPT : COMPROVANTE_PROMPT;
+
+      const extracted = await extractFromFiles(files, prompt, setProgressMsg);
+
+      navigate("/preview", {
+        state: { extractedData: extracted, tipo: "pf" },
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("Não foi possível processar. Tente novamente.");
+    } finally {
+      setLoading(false);
+      setProgressMsg("");
+    }
   };
 
   return (
@@ -77,13 +98,14 @@ const AnalisePF = () => {
               value={valor}
               onChange={(e) => setValor(e.target.value)}
               className={errors.valor ? "border-destructive" : ""}
+              disabled={loading}
             />
             {errors.valor && <p className="text-xs text-destructive">{errors.valor}</p>}
           </div>
 
           <div className="space-y-2">
             <Label>Finalidade do crédito</Label>
-            <Select value={finalidade} onValueChange={setFinalidade}>
+            <Select value={finalidade} onValueChange={setFinalidade} disabled={loading}>
               <SelectTrigger className={errors.finalidade ? "border-destructive" : ""}>
                 <SelectValue placeholder="Selecione a finalidade" />
               </SelectTrigger>
@@ -106,6 +128,7 @@ const AnalisePF = () => {
               value={prazo}
               onChange={(e) => setPrazo(e.target.value)}
               className={errors.prazo ? "border-destructive" : ""}
+              disabled={loading}
             />
             {errors.prazo && <p className="text-xs text-destructive">{errors.prazo}</p>}
           </div>
@@ -116,6 +139,7 @@ const AnalisePF = () => {
               value={uploadOption}
               onValueChange={(v) => setUploadOption(v as "irpf" | "comprovantes")}
               className="flex gap-6"
+              disabled={loading}
             >
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="irpf" id="opt-irpf" />
@@ -150,8 +174,20 @@ const AnalisePF = () => {
             )}
           </div>
 
-          <Button type="submit" className="w-full bg-navy text-navy-foreground hover:bg-navy-light" size="lg">
-            Analisar Crédito
+          <Button
+            type="submit"
+            className="w-full bg-navy text-navy-foreground hover:bg-navy-light"
+            size="lg"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                {progressMsg || "Processando..."}
+              </>
+            ) : (
+              "Analisar Crédito"
+            )}
           </Button>
         </form>
       </main>

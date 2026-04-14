@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index";
 import AnalisePF from "./pages/AnalisePF";
 import AnalisePJ from "./pages/AnalisePJ";
+import Preview from "./pages/Preview";
 import Resultado from "./pages/Resultado";
 import Historico from "./pages/Historico";
 import NotFound from "./pages/NotFound";
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/analise/pf" element={<AnalisePF />} />
           <Route path="/analise/pj" element={<AnalisePJ />} />
+          <Route path="/preview" element={<Preview />} />
           <Route path="/resultado" element={<Resultado />} />
           <Route path="/historico" element={<Historico />} />
           <Route path="*" element={<NotFound />} />
