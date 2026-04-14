@@ -205,6 +205,12 @@ const Resultado = () => {
           {/* BLOCO 3 — RESUMO ANALÍTICO */}
           <div style={{ marginBottom: "16px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
             <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "8px" }}>Resumo Analítico</p>
+            {result.tipo === "pj" && result.pjDocType && (
+              <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginBottom: "8px", padding: "6px 10px", background: "#f3f4f6", borderRadius: "4px" }}>
+                Análise baseada em {result.pjDocType === "balancos" ? "Balanços Patrimoniais" : "Relatório de Faturamento"}.
+                Critérios sem dados disponíveis foram desconsiderados e seus pesos redistribuídos.
+              </p>
+            )}
             <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "11px", color: "#374151" }}>
               {analysis.map((line, i) => (
                 <li key={i} style={{ marginBottom: "4px" }}>{line}</li>
