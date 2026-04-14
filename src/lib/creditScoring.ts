@@ -389,11 +389,6 @@ export function scorePJ(
   saveResult(result);
   return result;
 }
-  const config = loadConfig();
-  const fp = config.financialParams;
-  const breakdown: ScoreBreakdown[] = [];
-
-  const balancos = extractedData.balancos?.balancos || extractedData.balancos || [];
   const faturamento = extractedData.faturamento || {};
   const lastBalanco = Array.isArray(balancos) && balancos.length > 0 ? balancos[balancos.length - 1] : {};
   const prevBalanco = Array.isArray(balancos) && balancos.length > 1 ? balancos[balancos.length - 2] : null;
