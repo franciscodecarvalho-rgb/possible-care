@@ -1,0 +1,644 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import Header from "@/components/Header";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import {
+  Lock, LockOpen, ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle, Shield
+} from "lucide-react";
+import {
+  ScoringConfig, CriterionConfig, CustomCriterion, DecisionBand,
+  DEFAULT_CONFIG, loadConfig, saveConfig, resetConfig, exportConfig, importConfig,
+  getAdminPassword, setAdminPassword, isConfigAuthenticated, setConfigAuthenticated,
+  validateRanges, validateDecisionBands,
+} from "@/lib/scoringConfig";
+
+// ─── Password Modal ─────────────────────────────
+function PasswordModal({ onSuccess }: { onSuccess: () => void }) {
+  const [pwd, setPwd] = useState("");
+  const [error, setError] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwd === getAdminPassword()) {
+      setConfigAuthenticated(true);
+      onSuccess();
+    } else {
+      setError(true);
+      setPwd("");
+      inputRef.current?.focus();
+    }
+  };
+
+  return (
+    <Dialog open={true}>
+      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" /> Acesso Restrito
+          </DialogTitle>
+          <DialogDescription>
+            Área de configuração do motor de pontuação. Insira a senha de administrador.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            ref={inputRef}
+            type="password"
+            placeholder="Senha de administrador"
+            value={pwd}
+            onChange={(e) => { setPwd(e.target.value); setError(false); }}
+          />
+          {error && <p className="text-sm font-medium text-destructive">Senha incorreta</p>}
+          <Button type="submit" className="w-full">Acessar</Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Criteria Editor (weights + expandable ranges) ──────
+function CriteriaEditor({
+  criteria, onChange, customCriteria, onChangeCustom,
+  tabKey,
+}: {
+  criteria: CriterionConfig[];
+  onChange: (c: CriterionConfig[]) => void;
+  customCriteria: CustomCriterion[];
+  onChangeCustom: (c: CustomCriterion[]) => void;
+  tabKey: "pfIrpf" | "pfComprovantes" | "pj";
+}) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const total = criteria.reduce((s, c) => s + c.maxPoints, 0)
+    + customCriteria.filter(cc => cc.applicableTo.includes(tabKey)).reduce((s, c) => s + c.maxPoints, 0);
+
+  const toggleExpand = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+
+  const updateWeight = (idx: number, val: number) => {
+    const next = [...criteria];
+    next[idx] = { ...next[idx], maxPoints: val };
+    onChange(next);
+  };
+
+  const updateRange = (critIdx: number, rangeIdx: number, field: string, val: number) => {
+    const next = [...criteria];
+    const ranges = [...next[critIdx].ranges];
+    ranges[rangeIdx] = { ...ranges[rangeIdx], [field]: val };
+    next[critIdx] = { ...next[critIdx], ranges };
+    onChange(next);
+  };
+
+  const applicableCustom = customCriteria.filter(cc => cc.applicableTo.includes(tabKey));
+
+  return (
+    <div className="space-y-3">
+      {/* Standard criteria */}
+      {criteria.map((c, ci) => {
+        const isOpen = expanded[c.id];
+        const rangeError = validateRanges(c.ranges);
+        return (
+          <div key={c.id} className="rounded-lg border border-border bg-card">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="flex-1 text-sm font-medium text-foreground">{c.name}</span>
+              <Input
+                type="number" min={0} max={1000}
+                className="w-24 text-center"
+                value={c.maxPoints}
+                onChange={(e) => updateWeight(ci, parseInt(e.target.value) || 0)}
+              />
+              <Button variant="ghost" size="sm" onClick={() => toggleExpand(c.id)}>
+                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <span className="ml-1 text-xs">Faixas</span>
+              </Button>
+            </div>
+            {isOpen && (
+              <div className="border-t border-border bg-muted/30 px-4 py-3">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-muted-foreground">
+                      <th className="text-left pb-2">Faixa</th>
+                      <th className="text-center pb-2">De</th>
+                      <th className="text-center pb-2">Até</th>
+                      <th className="text-center pb-2">% do peso</th>
+                      <th className="text-center pb-2">Pontos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {c.ranges.map((r, ri) => (
+                      <tr key={ri} className="border-t border-border/50">
+                        <td className="py-2 text-foreground">{r.label}</td>
+                        <td className="py-2 text-center">
+                          <Input type="number" className="w-16 text-center text-xs mx-auto" value={r.min}
+                            onChange={(e) => updateRange(ci, ri, "min", parseFloat(e.target.value) || 0)} />
+                        </td>
+                        <td className="py-2 text-center">
+                          <Input type="number" className="w-16 text-center text-xs mx-auto" value={r.max}
+                            onChange={(e) => updateRange(ci, ri, "max", parseFloat(e.target.value) || 0)} />
+                        </td>
+                        <td className="py-2 text-center">
+                          <Input type="number" min={0} max={100} className="w-16 text-center text-xs mx-auto" value={r.percentage}
+                            onChange={(e) => updateRange(ci, ri, "percentage", parseInt(e.target.value) || 0)} />
+                        </td>
+                        <td className="py-2 text-center font-medium text-foreground">
+                          {Math.round(c.maxPoints * r.percentage / 100)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {rangeError && (
+                  <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
+                    <AlertTriangle className="h-3 w-3" /> {rangeError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Custom criteria applicable to this tab */}
+      {applicableCustom.map((cc) => {
+        const isOpen = expanded[cc.id];
+        return (
+          <div key={cc.id} className="rounded-lg border border-dashed border-primary/40 bg-card">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Badge variant="outline" className="text-xs">Custom</Badge>
+              <span className="flex-1 text-sm font-medium text-foreground">{cc.name}</span>
+              <Input
+                type="number" min={0} max={1000} className="w-24 text-center"
+                value={cc.maxPoints}
+                onChange={(e) => {
+                  const next = customCriteria.map(c => c.id === cc.id ? { ...c, maxPoints: parseInt(e.target.value) || 0 } : c);
+                  onChangeCustom(next);
+                }}
+              />
+              <Button variant="ghost" size="sm" onClick={() => toggleExpand(cc.id)}>
+                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </Button>
+              <Button variant="ghost" size="sm" className="text-destructive"
+                onClick={() => onChangeCustom(customCriteria.filter(c => c.id !== cc.id))}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+            {isOpen && cc.calcType === "ranges" && (
+              <div className="border-t border-border bg-muted/30 px-4 py-3">
+                <table className="w-full text-xs">
+                  <thead><tr className="text-muted-foreground">
+                    <th className="text-left pb-2">Faixa</th><th className="text-center pb-2">De</th>
+                    <th className="text-center pb-2">Até</th><th className="text-center pb-2">% do peso</th>
+                    <th className="text-center pb-2">Pontos</th>
+                  </tr></thead>
+                  <tbody>
+                    {cc.ranges.map((r, ri) => (
+                      <tr key={ri} className="border-t border-border/50">
+                        <td className="py-2">{r.label}</td>
+                        <td className="py-2 text-center">
+                          <Input type="number" className="w-16 text-center text-xs mx-auto" value={r.min}
+                            onChange={(e) => {
+                              const next = customCriteria.map(c => {
+                                if (c.id !== cc.id) return c;
+                                const ranges = [...c.ranges];
+                                ranges[ri] = { ...ranges[ri], min: parseFloat(e.target.value) || 0 };
+                                return { ...c, ranges };
+                              });
+                              onChangeCustom(next);
+                            }} />
+                        </td>
+                        <td className="py-2 text-center">
+                          <Input type="number" className="w-16 text-center text-xs mx-auto" value={r.max}
+                            onChange={(e) => {
+                              const next = customCriteria.map(c => {
+                                if (c.id !== cc.id) return c;
+                                const ranges = [...c.ranges];
+                                ranges[ri] = { ...ranges[ri], max: parseFloat(e.target.value) || 0 };
+                                return { ...c, ranges };
+                              });
+                              onChangeCustom(next);
+                            }} />
+                        </td>
+                        <td className="py-2 text-center">
+                          <Input type="number" min={0} max={100} className="w-16 text-center text-xs mx-auto" value={r.percentage}
+                            onChange={(e) => {
+                              const next = customCriteria.map(c => {
+                                if (c.id !== cc.id) return c;
+                                const ranges = [...c.ranges];
+                                ranges[ri] = { ...ranges[ri], percentage: parseInt(e.target.value) || 0 };
+                                return { ...c, ranges };
+                              });
+                              onChangeCustom(next);
+                            }} />
+                        </td>
+                        <td className="py-2 text-center font-medium">{Math.round(cc.maxPoints * r.percentage / 100)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {isOpen && cc.calcType === "boolean" && (
+              <div className="border-t border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                Sim = {cc.maxPoints} pts | Não = 0 pts
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Total */}
+      <div className={`flex items-center justify-between rounded-lg px-4 py-3 font-semibold ${total === 1000 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
+        <span>TOTAL</span>
+        <span className="flex items-center gap-2">
+          {total}
+          {total === 1000 ? " ✅" : (
+            <span className="flex items-center gap-1 text-xs">
+              <AlertTriangle className="h-3 w-3" /> A soma dos pesos é {total}. O total deve ser 1000.
+            </span>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Custom Criterion Dialog ────────────────
+function AddCustomDialog({
+  open, onOpenChange, onAdd,
+}: { open: boolean; onOpenChange: (v: boolean) => void; onAdd: (c: CustomCriterion) => void }) {
+  const [name, setName] = useState("");
+  const [maxPoints, setMaxPoints] = useState(50);
+  const [calcType, setCalcType] = useState<"boolean" | "ranges">("boolean");
+  const [applicableTo, setApplicableTo] = useState<("pfIrpf" | "pfComprovantes" | "pj")[]>(["pfIrpf"]);
+  const [referenceField, setReferenceField] = useState("");
+
+  const handleAdd = () => {
+    if (!name.trim()) return;
+    const id = `custom_${Date.now()}`;
+    const ranges: CustomCriterion["ranges"] = calcType === "boolean"
+      ? [{ label: "Não", min: 0, max: 1, percentage: 0 }, { label: "Sim", min: 1, max: 2, percentage: 100 }]
+      : [
+        { label: "Baixo", min: 0, max: 33, percentage: 0 },
+        { label: "Médio", min: 33, max: 66, percentage: 50 },
+        { label: "Alto", min: 66, max: 100, percentage: 100 },
+      ];
+    onAdd({ id, name: name.trim(), maxPoints, ranges, calcType, applicableTo, referenceField });
+    setName(""); setMaxPoints(50); setCalcType("boolean"); setApplicableTo(["pfIrpf"]); setReferenceField("");
+    onOpenChange(false);
+  };
+
+  const toggleApplicable = (key: "pfIrpf" | "pfComprovantes" | "pj") => {
+    setApplicableTo(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Adicionar Critério Customizado</DialogTitle>
+          <DialogDescription>Critérios customizados dependem de dados que a IA consiga extrair dos documentos.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Nome do critério</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Histórico de inadimplência" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Peso máximo</label>
+            <Input type="number" min={1} max={500} value={maxPoints} onChange={(e) => setMaxPoints(parseInt(e.target.value) || 0)} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Tipo de cálculo</label>
+            <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={calcType} onChange={(e) => setCalcType(e.target.value as any)}>
+              <option value="boolean">Sim/Não</option>
+              <option value="ranges">Faixas de valor</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Aplicável a</label>
+            <div className="flex gap-3 mt-1">
+              {(["pfIrpf", "pfComprovantes", "pj"] as const).map(k => (
+                <label key={k} className="flex items-center gap-1 text-sm">
+                  <input type="checkbox" checked={applicableTo.includes(k)}
+                    onChange={() => toggleApplicable(k)} className="rounded" />
+                  {k === "pfIrpf" ? "PF IRPF" : k === "pfComprovantes" ? "PF Comprovantes" : "PJ"}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Campo de referência</label>
+            <Input value={referenceField} onChange={(e) => setReferenceField(e.target.value)}
+              placeholder="Descreva qual dado da extração usar" />
+          </div>
+          <Button onClick={handleAdd} disabled={!name.trim()} className="w-full">Adicionar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Page ─────────────────────────────────
+export default function Configuracoes() {
+  const [authenticated, setAuthenticated] = useState(isConfigAuthenticated());
+  const [config, setConfig] = useState<ScoringConfig>(() => loadConfig());
+  const [savedConfig, setSavedConfig] = useState<string>(() => JSON.stringify(loadConfig()));
+  const [addCustomOpen, setAddCustomOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hasChanges = useMemo(() => JSON.stringify(config) !== savedConfig, [config, savedConfig]);
+
+  const handleSave = () => {
+    saveConfig(config);
+    setSavedConfig(JSON.stringify(config));
+    toast.success("Configurações salvas com sucesso.");
+  };
+
+  const handleReset = () => {
+    const def = structuredClone(DEFAULT_CONFIG);
+    setConfig(def);
+    saveConfig(def);
+    setSavedConfig(JSON.stringify(def));
+    toast.success("Configurações restauradas para os valores padrão.");
+  };
+
+  const handleExport = () => exportConfig(config);
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const imported = await importConfig(file);
+      setConfig(imported);
+      toast.success("Configurações importadas. Clique em Salvar para aplicar.");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao importar");
+    }
+    e.target.value = "";
+  };
+
+  const handleLock = () => {
+    setConfigAuthenticated(false);
+    setAuthenticated(false);
+  };
+
+  // Password change
+  const [currentPwd, setCurrentPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+  const [pwdError, setPwdError] = useState("");
+
+  const handleChangePwd = () => {
+    setPwdError("");
+    if (currentPwd !== getAdminPassword()) { setPwdError("Senha atual incorreta."); return; }
+    if (newPwd.length < 4) { setPwdError("A nova senha deve ter pelo menos 4 caracteres."); return; }
+    if (newPwd !== confirmPwd) { setPwdError("A confirmação não confere."); return; }
+    setAdminPassword(newPwd);
+    setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
+    toast.success("Senha alterada com sucesso.");
+  };
+
+  const bandsError = useMemo(() => validateDecisionBands(config.decisionBands), [config.decisionBands]);
+
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <PasswordModal onSuccess={() => setAuthenticated(true)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Header />
+
+      {/* Lock bar */}
+      <div className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur">
+        <div className="container mx-auto flex items-center justify-between px-6 py-2">
+          <h1 className="text-lg font-semibold text-foreground">Configurações do Motor de Pontuação</h1>
+          <div className="flex items-center gap-3">
+            {hasChanges && (
+              <Badge variant="destructive" className="text-xs">Alterações não salvas</Badge>
+            )}
+            <Button variant="outline" size="sm" onClick={handleLock}>
+              <LockOpen className="mr-1 h-4 w-4" /> Bloquear
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto max-w-5xl px-6 py-6 space-y-8">
+        {/* SECTION 1 & 2: Criteria by tab */}
+        <Tabs defaultValue="pfIrpf">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="pfIrpf">Pessoa Física (IRPF)</TabsTrigger>
+            <TabsTrigger value="pfComprovantes">Pessoa Física (Comprovantes)</TabsTrigger>
+            <TabsTrigger value="pj">Pessoa Jurídica</TabsTrigger>
+          </TabsList>
+
+          {(["pfIrpf", "pfComprovantes", "pj"] as const).map((tab) => (
+            <TabsContent key={tab} value={tab} className="mt-4">
+              <CriteriaEditor
+                criteria={config[tab]}
+                onChange={(c) => setConfig(prev => ({ ...prev, [tab]: c }))}
+                customCriteria={config.customCriteria}
+                onChangeCustom={(c) => setConfig(prev => ({ ...prev, customCriteria: c }))}
+                tabKey={tab}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
+
+        {/* SECTION 3: Decision Bands */}
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold text-foreground">Faixas de Decisão</h2>
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left px-4 py-2">Decisão</th>
+                  <th className="text-center px-4 py-2">Score mínimo</th>
+                  <th className="text-center px-4 py-2">Score máximo</th>
+                  <th className="text-center px-4 py-2">Cor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {config.decisionBands.map((band, i) => (
+                  <tr key={i} className="border-t border-border">
+                    <td className="px-4 py-2 font-medium">{band.label}</td>
+                    <td className="px-4 py-2 text-center">
+                      <Input type="number" min={0} max={1000} className="w-20 text-center text-xs mx-auto"
+                        value={band.min} onChange={(e) => {
+                          const next = [...config.decisionBands];
+                          next[i] = { ...next[i], min: parseInt(e.target.value) || 0 };
+                          setConfig(prev => ({ ...prev, decisionBands: next }));
+                        }} />
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <Input type="number" min={0} max={1000} className="w-20 text-center text-xs mx-auto"
+                        value={band.max} onChange={(e) => {
+                          const next = [...config.decisionBands];
+                          next[i] = { ...next[i], max: parseInt(e.target.value) || 0 };
+                          setConfig(prev => ({ ...prev, decisionBands: next }));
+                        }} />
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <div className="mx-auto h-5 w-5 rounded-full" style={{ backgroundColor: band.color }} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {bandsError && (
+            <p className="flex items-center gap-1 text-xs text-destructive">
+              <AlertTriangle className="h-3 w-3" /> {bandsError}
+            </p>
+          )}
+        </section>
+
+        {/* SECTION 4: Financial Params */}
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold text-foreground">Parâmetros Financeiros</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-border bg-card p-4">
+            <div>
+              <label className="text-xs text-muted-foreground">Taxa de juros mensal (%)</label>
+              <Input type="number" step={0.1} min={0} value={config.financialParams.taxaMensal}
+                onChange={(e) => setConfig(prev => ({
+                  ...prev, financialParams: { ...prev.financialParams, taxaMensal: parseFloat(e.target.value) || 0 }
+                }))} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Prazo padrão (meses)</label>
+              <Input type="number" min={1} value={config.financialParams.prazoPadrao}
+                onChange={(e) => setConfig(prev => ({
+                  ...prev, financialParams: { ...prev.financialParams, prazoPadrao: parseInt(e.target.value) || 1 }
+                }))} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Penalização campos ausentes (pts)</label>
+              <Input type="number" max={0} value={config.financialParams.penalizacaoCamposAusentes}
+                onChange={(e) => setConfig(prev => ({
+                  ...prev, financialParams: { ...prev.financialParams, penalizacaoCamposAusentes: parseInt(e.target.value) || 0 }
+                }))} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Mínimo de campos extraídos (%)</label>
+              <Input type="number" min={0} max={100} value={config.financialParams.percentualMinimoExtracoes}
+                onChange={(e) => setConfig(prev => ({
+                  ...prev, financialParams: { ...prev.financialParams, percentualMinimoExtracoes: parseInt(e.target.value) || 0 }
+                }))} />
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 5: Custom Criteria */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">Critérios Customizados</h2>
+            <Button variant="outline" size="sm" onClick={() => setAddCustomOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" /> Adicionar critério
+            </Button>
+          </div>
+          {config.customCriteria.length === 0 ? (
+            <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border p-6 text-center">
+              Nenhum critério customizado. Clique em "+ Adicionar critério" para criar.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {config.customCriteria.map(cc => (
+                <div key={cc.id} className="flex items-center gap-3 rounded-lg border border-dashed border-primary/30 bg-card px-4 py-3">
+                  <Badge variant="outline" className="text-xs">Custom</Badge>
+                  <span className="flex-1 text-sm">{cc.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {cc.calcType === "boolean" ? "Sim/Não" : "Faixas"} · {cc.maxPoints} pts ·
+                    {cc.applicableTo.map(a => a === "pfIrpf" ? " PF IRPF" : a === "pfComprovantes" ? " PF Comp." : " PJ").join(",")}
+                  </span>
+                  <Button variant="ghost" size="sm" className="text-destructive"
+                    onClick={() => setConfig(prev => ({ ...prev, customCriteria: prev.customCriteria.filter(c => c.id !== cc.id) }))}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground italic">
+            Observação: Critérios customizados dependem de dados que a IA consiga extrair dos documentos.
+          </p>
+        </section>
+
+        {/* SECTION 6: Security */}
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <Shield className="h-4 w-4" /> Segurança
+          </h2>
+          <div className="rounded-lg border border-border bg-card p-4 space-y-3 max-w-md">
+            <div>
+              <label className="text-xs text-muted-foreground">Senha atual</label>
+              <Input type="password" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Nova senha</label>
+              <Input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Confirmar nova senha</label>
+              <Input type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} />
+            </div>
+            {pwdError && <p className="text-xs text-destructive">{pwdError}</p>}
+            <Button onClick={handleChangePwd} size="sm">Alterar Senha</Button>
+          </div>
+        </section>
+      </div>
+
+      {/* Sticky footer */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur">
+        <div className="container mx-auto flex items-center justify-between px-6 py-3 max-w-5xl">
+          <div className="flex gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <RotateCcw className="mr-1 h-4 w-4" /> Restaurar Padrão
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Restaurar configurações padrão?</AlertDialogTitle>
+                  <AlertDialogDescription>Tem certeza? Isso vai sobrescrever todas as suas configurações.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleReset}>Restaurar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button variant="outline" size="sm" onClick={handleExport}>
+              <Download className="mr-1 h-4 w-4" /> Exportar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="mr-1 h-4 w-4" /> Importar
+            </Button>
+            <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+          </div>
+          <Button onClick={handleSave} className="gap-2">
+            <Save className="h-4 w-4" /> Salvar Configurações
+            {hasChanges && <span className="ml-1 h-2 w-2 rounded-full bg-destructive-foreground animate-pulse" />}
+          </Button>
+        </div>
+      </div>
+
+      <AddCustomDialog open={addCustomOpen} onOpenChange={setAddCustomOpen}
+        onAdd={(c) => setConfig(prev => ({ ...prev, customCriteria: [...prev.customCriteria, c] }))} />
+    </div>
+  );
+}
