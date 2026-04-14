@@ -18,6 +18,10 @@ const Resultado = () => {
   const formData = location.state?.formData as { valor: number; prazo: number; finalidade: string } | undefined;
 
   useEffect(() => {
+    if (location.state?.fromHistory) {
+      setResult(location.state.fromHistory as ScoringResult);
+      return;
+    }
     if (!extractedData || !formData) return;
     if (tipo === "pf") {
       const r = scorePF(extractedData, formData.valor, formData.prazo, formData.finalidade);
