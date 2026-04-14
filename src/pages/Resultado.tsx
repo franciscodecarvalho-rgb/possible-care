@@ -185,9 +185,9 @@ const Resultado = () => {
               <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Identificação</p>
               <table style={{ width: "100%", fontSize: "11px" }}>
                 <tbody>
-                  <Row label="Nome" value={ed.nome_completo || ed.razao_social || ed.balancos?.razao_social || ed.representante?.nome || "NÃO INFORMADO"} />
+                  <Row label="Nome" value={ed.nome_completo || ed.razao_social || ed.balancos?.razao_social || "NÃO INFORMADO"} />
                   <Row label="CPF/CNPJ" value={ed.cpf || ed.cnpj || ed.balancos?.cnpj || ed.faturamento?.cnpj || "NÃO INFORMADO"} />
-                  <Row label={result.tipo === "pj" ? "Representante" : "Ocupação"} value={result.tipo === "pj" ? (ed.representante?.nome || "NÃO INFORMADO") : (ed.ocupacao || "NÃO INFORMADO")} />
+                  {result.tipo === "pf" && <Row label="Ocupação" value={ed.ocupacao || "NÃO INFORMADO"} />}
                 </tbody>
               </table>
             </div>
@@ -196,7 +196,6 @@ const Resultado = () => {
               <table style={{ width: "100%", fontSize: "11px" }}>
                 <tbody>
                   <Row label="Valor" value={fmt(fd.valor)} />
-                  <Row label="Finalidade" value={fd.finalidade} />
                   <Row label="Prazo" value={`${fd.prazo} meses`} />
                 </tbody>
               </table>

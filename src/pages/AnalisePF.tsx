@@ -5,31 +5,15 @@ import FileDropzone from "@/components/FileDropzone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { extractFromFiles } from "@/lib/extractionService";
 import { IRPF_PROMPT, COMPROVANTE_PROMPT } from "@/lib/pdfExtractor";
 
-const finalidades = [
-  "Capital de giro",
-  "Aquisição de equipamento",
-  "Imóvel",
-  "Veículo",
-  "Outros",
-];
-
 const AnalisePF = () => {
   const navigate = useNavigate();
   const [valor, setValor] = useState("");
-  const [finalidade, setFinalidade] = useState("");
   const [prazo, setPrazo] = useState("");
   const [uploadOption, setUploadOption] = useState<"irpf" | "comprovantes">("irpf");
   const [irpfFiles, setIrpfFiles] = useState<File[]>([]);
@@ -42,7 +26,6 @@ const AnalisePF = () => {
     const e: Record<string, string> = {};
     const v = parseFloat(valor.replace(/\D/g, ""));
     if (!valor || isNaN(v) || v <= 0) e.valor = "Informe um valor maior que zero.";
-    if (!finalidade) e.finalidade = "Selecione uma finalidade.";
     if (!prazo || parseInt(prazo) <= 0) e.prazo = "Informe um prazo válido.";
     if (uploadOption === "irpf" && irpfFiles.length === 0)
       e.irpf = "Envie a declaração IRPF.";
@@ -70,7 +53,7 @@ const AnalisePF = () => {
         state: {
           extractedData: extracted,
           tipo: "pf",
-          formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade },
+          formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade: "" },
         },
       });
     } catch (err) {
@@ -105,21 +88,6 @@ const AnalisePF = () => {
               disabled={loading}
             />
             {errors.valor && <p className="text-xs text-destructive">{errors.valor}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Finalidade do crédito</Label>
-            <Select value={finalidade} onValueChange={setFinalidade} disabled={loading}>
-              <SelectTrigger className={errors.finalidade ? "border-destructive" : ""}>
-                <SelectValue placeholder="Selecione a finalidade" />
-              </SelectTrigger>
-              <SelectContent>
-                {finalidades.map((f) => (
-                  <SelectItem key={f} value={f}>{f}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.finalidade && <p className="text-xs text-destructive">{errors.finalidade}</p>}
           </div>
 
           <div className="space-y-2">
