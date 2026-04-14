@@ -115,6 +115,7 @@ const Preview = () => {
   const navigate = useNavigate();
   const extractedData = location.state?.extractedData as Record<string, any> | undefined;
   const tipo = (location.state?.tipo as string) || "pf";
+  const formData = location.state?.formData as { valor: number; prazo: number; finalidade: string } | undefined;
 
   if (!extractedData) {
     return (
@@ -137,7 +138,7 @@ const Preview = () => {
 
   const handleConfirm = () => {
     toast.success("Relatório será gerado em breve.");
-    navigate("/resultado", { state: { extractedData, tipo } });
+    navigate("/resultado", { state: { extractedData, tipo, formData } });
   };
 
   return (

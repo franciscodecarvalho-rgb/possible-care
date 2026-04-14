@@ -67,7 +67,11 @@ const AnalisePF = () => {
       const extracted = await extractFromFiles(files, prompt, setProgressMsg);
 
       navigate("/preview", {
-        state: { extractedData: extracted, tipo: "pf" },
+        state: {
+          extractedData: extracted,
+          tipo: "pf",
+          formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade },
+        },
       });
     } catch (err) {
       console.error(err);
