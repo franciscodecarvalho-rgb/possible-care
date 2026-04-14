@@ -1,4 +1,7 @@
 // Credit Scoring Engine — Pessoa Física (IRPF) + Pessoa Jurídica (PJ)
+// Reads configurable parameters from localStorage via scoringConfig
+
+import { loadConfig, type ScoringConfig } from "./scoringConfig";
 
 export interface ScoreBreakdown {
   category: string;
@@ -50,26 +53,24 @@ const calcParcela = (pv: number, taxaMensal: number, prazoMeses: number): number
   return pv * (i * pow) / (pow - 1);
 };
 
-function makeDecision(score: number, insufficientData: boolean) {
-  let decision: string;
-  let decisionColor: string;
+function getConfiguredWeight(config: ScoringConfig, type: "pfIrpf" | "pj", criterionId: string): number {
+  const criteria = config[type];
+  const found = criteria.find(c => c.id === criterionId);
+  return found?.maxPoints ?? 0;
+}
+
+function makeDecision(score: number, insufficientData: boolean, config: ScoringConfig) {
   if (insufficientData) {
-    decision = "ANÁLISE INCONCLUSIVA — DADOS INSUFICIENTES";
-    decisionColor = "#6b7280";
-  } else if (score >= 750) {
-    decision = "CRÉDITO APROVADO";
-    decisionColor = "#16a34a";
-  } else if (score >= 500) {
-    decision = "APROVADO COM RESSALVAS";
-    decisionColor = "#ea580c";
-  } else if (score >= 300) {
-    decision = "CRÉDITO REPROVADO";
-    decisionColor = "#dc2626";
-  } else {
-    decision = "CRÉDITO REPROVADO — RISCO ELEVADO";
-    decisionColor = "#991b1b";
+    return { decision: "ANÁLISE INCONCLUSIVA — DADOS INSUFICIENTES", decisionColor: "#6b7280" };
   }
-  return { decision, decisionColor };
+  const sorted = [...config.decisionBands].sort((a, b) => b.min - a.min);
+  for (const band of sorted) {
+    if (score >= band.min && score <= band.max) {
+      return { decision: band.label, decisionColor: band.color };
+    }
+  }
+  const lowest = sorted[sorted.length - 1];
+  return { decision: lowest?.label || "INDEFINIDO", decisionColor: lowest?.color || "#6b7280" };
 }
 
 function saveResult(result: ScoringResult) {
@@ -85,6 +86,8 @@ export function scorePF(
   prazo: number,
   finalidade: string
 ): ScoringResult {
+  const config = loadConfig();
+  const fp = config.financialParams;
   const breakdown: ScoreBreakdown[] = [];
 
   const keyFields = [
@@ -93,7 +96,7 @@ export function scorePF(
     "aliquota_efetiva_percentual", "imposto_devido_total",
   ];
   const missingCount = keyFields.filter((k) => isMissing(extractedData[k])).length;
-  const insufficientData = missingCount > keyFields.length * 0.5;
+  const insufficientData = missingCount > keyFields.length * (fp.percentualMinimoExtracoes / 100);
 
   const rendaAnual = num(extractedData.renda_total_anual);
   const rendaMensal = rendaAnual / 12;
@@ -108,64 +111,73 @@ export function scorePF(
   const numFontes = num(extractedData.numero_fontes_renda);
   const dividendos = num(extractedData.dividendos_recebidos);
 
-  // 1. Comprometimento de renda (250pts)
-  const parcela = calcParcela(valor, 0.02, prazo);
+  const w1 = getConfiguredWeight(config, "pfIrpf", "pf_comprometimento");
+  const w2 = getConfiguredWeight(config, "pfIrpf", "pf_evolucao");
+  const w3 = getConfiguredWeight(config, "pfIrpf", "pf_patrimonio_renda");
+  const w4 = getConfiguredWeight(config, "pfIrpf", "pf_endividamento");
+  const w5 = getConfiguredWeight(config, "pfIrpf", "pf_estabilidade");
+  const w6 = getConfiguredWeight(config, "pfIrpf", "pf_bens_reais");
+  const w7 = getConfiguredWeight(config, "pfIrpf", "pf_coerencia");
+
+  // 1. Comprometimento de renda
+  const taxa = fp.taxaMensal / 100;
+  const parcela = calcParcela(valor, taxa, prazo);
   const comprometimento = rendaMensal > 0 ? parcela / rendaMensal : 1;
   let pts1 = 0; let det1 = "";
-  if (comprometimento < 0.25) { pts1 = 250; det1 = `${(comprometimento * 100).toFixed(1)}% (<25%)`; }
-  else if (comprometimento <= 0.35) { pts1 = 180; det1 = `${(comprometimento * 100).toFixed(1)}% (25-35%)`; }
-  else if (comprometimento <= 0.50) { pts1 = 90; det1 = `${(comprometimento * 100).toFixed(1)}% (35-50%)`; }
+  if (comprometimento < 0.25) { pts1 = w1; det1 = `${(comprometimento * 100).toFixed(1)}% (<25%)`; }
+  else if (comprometimento <= 0.35) { pts1 = Math.round(w1 * 0.72); det1 = `${(comprometimento * 100).toFixed(1)}% (25-35%)`; }
+  else if (comprometimento <= 0.50) { pts1 = Math.round(w1 * 0.36); det1 = `${(comprometimento * 100).toFixed(1)}% (35-50%)`; }
   else { pts1 = 0; det1 = `${(comprometimento * 100).toFixed(1)}% (>50%)`; }
-  breakdown.push({ category: "Comprometimento de Renda", maxPoints: 250, points: pts1, detail: det1 });
+  breakdown.push({ category: "Comprometimento de Renda", maxPoints: w1, points: pts1, detail: det1 });
 
-  // 2. Evolução patrimonial (200pts)
+  // 2. Evolução patrimonial
   const evolucao = rendaAnual > 0 ? (bensAtual - bensAnterior) / rendaAnual : -1;
   let pts2 = 0; let det2 = "";
   if (evolucao < 0) { pts2 = 0; det2 = "Negativa"; }
-  else if (evolucao < 0.05) { pts2 = 20; det2 = `${(evolucao * 100).toFixed(1)}% (<5%)`; }
-  else if (evolucao < 0.10) { pts2 = 80; det2 = `${(evolucao * 100).toFixed(1)}% (5-10%)`; }
-  else if (evolucao <= 0.20) { pts2 = 150; det2 = `${(evolucao * 100).toFixed(1)}% (10-20%)`; }
-  else { pts2 = 200; det2 = `${(evolucao * 100).toFixed(1)}% (>20%)`; }
-  breakdown.push({ category: "Evolução Patrimonial", maxPoints: 200, points: pts2, detail: det2 });
+  else if (evolucao < 0.05) { pts2 = Math.round(w2 * 0.10); det2 = `${(evolucao * 100).toFixed(1)}% (<5%)`; }
+  else if (evolucao < 0.10) { pts2 = Math.round(w2 * 0.40); det2 = `${(evolucao * 100).toFixed(1)}% (5-10%)`; }
+  else if (evolucao <= 0.20) { pts2 = Math.round(w2 * 0.75); det2 = `${(evolucao * 100).toFixed(1)}% (10-20%)`; }
+  else { pts2 = w2; det2 = `${(evolucao * 100).toFixed(1)}% (>20%)`; }
+  breakdown.push({ category: "Evolução Patrimonial", maxPoints: w2, points: pts2, detail: det2 });
 
-  // 3. Patrimônio vs Renda (150pts)
+  // 3. Patrimônio vs Renda
   const ratio = rendaAnual > 0 ? bensAtual / rendaAnual : 0;
   let pts3 = 0; const det3 = `${ratio.toFixed(2)}x`;
-  if (ratio > 2) pts3 = 150; else if (ratio >= 1) pts3 = 100; else if (ratio >= 0.5) pts3 = 50; else pts3 = 10;
-  breakdown.push({ category: "Patrimônio vs Renda", maxPoints: 150, points: pts3, detail: det3 });
+  if (ratio > 2) pts3 = w3; else if (ratio >= 1) pts3 = Math.round(w3 * 0.67); else if (ratio >= 0.5) pts3 = Math.round(w3 * 0.33); else pts3 = Math.round(w3 * 0.07);
+  breakdown.push({ category: "Patrimônio vs Renda", maxPoints: w3, points: pts3, detail: det3 });
 
-  // 4. Endividamento (150pts)
+  // 4. Endividamento
   let pts4 = 0; let det4 = "";
-  if (dividasTotal === 0) { pts4 = 150; det4 = "Sem dívidas"; }
+  if (dividasTotal === 0) { pts4 = w4; det4 = "Sem dívidas"; }
   else if (bensAtual > 0) {
     const debtRatio = dividasTotal / bensAtual;
-    if (debtRatio < 0.30) { pts4 = 100; det4 = `${(debtRatio * 100).toFixed(1)}% (<30%)`; }
-    else if (debtRatio <= 0.60) { pts4 = 50; det4 = `${(debtRatio * 100).toFixed(1)}% (30-60%)`; }
+    if (debtRatio < 0.30) { pts4 = Math.round(w4 * 0.67); det4 = `${(debtRatio * 100).toFixed(1)}% (<30%)`; }
+    else if (debtRatio <= 0.60) { pts4 = Math.round(w4 * 0.33); det4 = `${(debtRatio * 100).toFixed(1)}% (30-60%)`; }
     else { pts4 = 0; det4 = `${(debtRatio * 100).toFixed(1)}% (>60%)`; }
   } else { pts4 = 0; det4 = "Patrimônio zero"; }
-  breakdown.push({ category: "Endividamento", maxPoints: 150, points: pts4, detail: det4 });
+  breakdown.push({ category: "Endividamento", maxPoints: w4, points: pts4, detail: det4 });
 
-  // 5. Estabilidade de renda (100pts)
-  let pts5 = 60; let det5 = "Fonte única";
-  if (multiplasFontes || (numFontes > 1 && dividendos > 0)) { pts5 = 100; det5 = "Múltiplas fontes + dividendos"; }
-  else if (numFontes > 1) { pts5 = 80; det5 = "Múltiplas fontes"; }
-  else if (rendaAnual > 0 && dividendos > 0) { pts5 = 100; det5 = "Emprego + dividendos"; }
-  breakdown.push({ category: "Estabilidade de Renda", maxPoints: 100, points: pts5, detail: det5 });
+  // 5. Estabilidade de renda
+  let pts5 = Math.round(w5 * 0.60); let det5 = "Fonte única";
+  if (multiplasFontes || (numFontes > 1 && dividendos > 0)) { pts5 = w5; det5 = "Múltiplas fontes + dividendos"; }
+  else if (numFontes > 1) { pts5 = Math.round(w5 * 0.80); det5 = "Múltiplas fontes"; }
+  else if (rendaAnual > 0 && dividendos > 0) { pts5 = w5; det5 = "Emprego + dividendos"; }
+  breakdown.push({ category: "Estabilidade de Renda", maxPoints: w5, points: pts5, detail: det5 });
 
-  // 6. Posse de bens reais (100pts)
+  // 6. Posse de bens reais
   let pts6 = 0; const det6Parts: string[] = [];
-  if (possuiImovel) { pts6 += 60; det6Parts.push("Imóvel"); }
-  if (possuiVeiculo) { pts6 += 40; det6Parts.push("Veículo"); }
+  if (possuiImovel) { pts6 += Math.round(w6 * 0.60); det6Parts.push("Imóvel"); }
+  if (possuiVeiculo) { pts6 += Math.round(w6 * 0.40); det6Parts.push("Veículo"); }
   const det6 = det6Parts.length ? det6Parts.join(" + ") : "Nenhum bem real";
-  breakdown.push({ category: "Posse de Bens Reais", maxPoints: 100, points: pts6, detail: det6 });
+  breakdown.push({ category: "Posse de Bens Reais", maxPoints: w6, points: pts6, detail: det6 });
 
-  // 7. Coerência tributária (50pts)
+  // 7. Coerência tributária
   let pts7 = 0; let det7 = "Inconsistente ou não informado";
-  if (aliquota > 0 && impostoDevido > 0) { pts7 = 50; det7 = `Alíquota ${aliquota}% — coerente`; }
-  breakdown.push({ category: "Coerência Tributária", maxPoints: 50, points: pts7, detail: det7 });
+  if (aliquota > 0 && impostoDevido > 0) { pts7 = w7; det7 = `Alíquota ${aliquota}% — coerente`; }
+  breakdown.push({ category: "Coerência Tributária", maxPoints: w7, points: pts7, detail: det7 });
 
   const score = breakdown.reduce((s, b) => s + b.points, 0);
-  const { decision, decisionColor } = makeDecision(score, insufficientData);
+  const { decision, decisionColor } = makeDecision(score, insufficientData, config);
 
   const result: ScoringResult = {
     score, breakdown, decision, decisionColor, insufficientData,
@@ -183,9 +195,10 @@ export function scorePJ(
   prazo: number,
   finalidade: string
 ): ScoringResult {
+  const config = loadConfig();
+  const fp = config.financialParams;
   const breakdown: ScoreBreakdown[] = [];
 
-  // Extract PJ data from nested structure
   const balancos = extractedData.balancos?.balancos || extractedData.balancos || [];
   const faturamento = extractedData.faturamento || {};
   const lastBalanco = Array.isArray(balancos) && balancos.length > 0 ? balancos[balancos.length - 1] : {};
@@ -203,26 +216,31 @@ export function scorePJ(
   const fatTotal = num(faturamento.faturamento_total_12_meses) || num(faturamento.faturamento_total_12m);
   const mediaMensal = num(faturamento.media_mensal);
   const cv = num(faturamento.coeficiente_variacao_percentual);
-
-  // Estimate tempo de mercado from razao_social or cnpj — default 5 if unknown
   const tempoMercado = num(extractedData.tempo_mercado_anos) || num(extractedData.balancos?.tempo_mercado_anos) || 0;
 
-  // Check data sufficiency
   const keyVals = [ativoCirculante, passivoCirculante, ativoTotal, patrimonioLiquido, receitaBruta, fatTotal, mediaMensal];
   const missingCount = keyVals.filter((v) => v === 0).length;
-  const insufficientData = missingCount > keyVals.length * 0.5;
+  const insufficientData = missingCount > keyVals.length * (fp.percentualMinimoExtracoes / 100);
 
-  // 1. Liquidez corrente (150pts) — AC/PC
+  const w1 = getConfiguredWeight(config, "pj", "pj_liquidez");
+  const w2 = getConfiguredWeight(config, "pj", "pj_evolucao_fat");
+  const w3 = getConfiguredWeight(config, "pj", "pj_margem");
+  const w4 = getConfiguredWeight(config, "pj", "pj_endividamento");
+  const w5 = getConfiguredWeight(config, "pj", "pj_comprometimento_pl");
+  const w6 = getConfiguredWeight(config, "pj", "pj_regularidade");
+  const w7 = getConfiguredWeight(config, "pj", "pj_tempo_mercado");
+  const w8 = getConfiguredWeight(config, "pj", "pj_pl");
+
+  // 1. Liquidez corrente — AC/PC
   const lc = passivoCirculante > 0 ? ativoCirculante / passivoCirculante : 0;
   let pts1 = 0; let det1 = `${lc.toFixed(2)}`;
-  if (lc > 1.5) { pts1 = 150; det1 += " (>1.5)"; }
-  else if (lc >= 1.2) { pts1 = 120; det1 += " (1.2-1.5)"; }
-  else if (lc >= 1.0) { pts1 = 70; det1 += " (1.0-1.2)"; }
+  if (lc > 1.5) { pts1 = w1; det1 += " (>1.5)"; }
+  else if (lc >= 1.2) { pts1 = Math.round(w1 * 0.80); det1 += " (1.2-1.5)"; }
+  else if (lc >= 1.0) { pts1 = Math.round(w1 * 0.47); det1 += " (1.0-1.2)"; }
   else { pts1 = 0; det1 += " (<1.0)"; }
-  breakdown.push({ category: "Liquidez Corrente", maxPoints: 150, points: pts1, detail: det1 });
+  breakdown.push({ category: "Liquidez Corrente", maxPoints: w1, points: pts1, detail: det1 });
 
-  // 2. Evolução faturamento (150pts)
-  // Estimate growth from monthly data if available
+  // 2. Evolução faturamento
   const fatMensal = faturamento.faturamento_mensal || [];
   let crescimento = 0;
   if (Array.isArray(fatMensal) && fatMensal.length >= 6) {
@@ -230,86 +248,85 @@ export function scorePJ(
     const secondHalf = fatMensal.slice(-6).reduce((s: number, m: any) => s + num(m.valor), 0);
     crescimento = firstHalf > 0 ? ((secondHalf - firstHalf) / firstHalf) * 100 : 0;
   }
-  let pts2 = 60; let det2 = "";
-  if (crescimento > 10) { pts2 = 150; det2 = `Crescimento ${crescimento.toFixed(1)}% (>10%)`; }
-  else if (crescimento > 0) { pts2 = 100; det2 = `Crescimento ${crescimento.toFixed(1)}% (0-10%)`; }
-  else if (crescimento === 0) { pts2 = 60; det2 = "Estável"; }
+  let pts2 = Math.round(w2 * 0.40); let det2 = "";
+  if (crescimento > 10) { pts2 = w2; det2 = `Crescimento ${crescimento.toFixed(1)}% (>10%)`; }
+  else if (crescimento > 0) { pts2 = Math.round(w2 * 0.67); det2 = `Crescimento ${crescimento.toFixed(1)}% (0-10%)`; }
+  else if (crescimento === 0) { pts2 = Math.round(w2 * 0.40); det2 = "Estável"; }
   else { pts2 = 0; det2 = `Queda ${crescimento.toFixed(1)}%`; }
-  breakdown.push({ category: "Evolução Faturamento", maxPoints: 150, points: pts2, detail: det2 });
+  breakdown.push({ category: "Evolução Faturamento", maxPoints: w2, points: pts2, detail: det2 });
 
-  // 3. Margem lucro (150pts) — LL/RB
+  // 3. Margem lucro — LL/RB
   const rb = receitaBruta || fatTotal;
   const margem = rb > 0 ? (lucroLiquido / rb) * 100 : -1;
   let pts3 = 0; let det3 = "";
   if (margem < 0) { pts3 = 0; det3 = "Negativa"; }
-  else if (margem < 3) { pts3 = 20; det3 = `${margem.toFixed(1)}% (0-3%)`; }
-  else if (margem < 8) { pts3 = 60; det3 = `${margem.toFixed(1)}% (3-8%)`; }
-  else if (margem <= 15) { pts3 = 110; det3 = `${margem.toFixed(1)}% (8-15%)`; }
-  else { pts3 = 150; det3 = `${margem.toFixed(1)}% (>15%)`; }
-  breakdown.push({ category: "Margem de Lucro", maxPoints: 150, points: pts3, detail: det3 });
+  else if (margem < 3) { pts3 = Math.round(w3 * 0.13); det3 = `${margem.toFixed(1)}% (0-3%)`; }
+  else if (margem < 8) { pts3 = Math.round(w3 * 0.40); det3 = `${margem.toFixed(1)}% (3-8%)`; }
+  else if (margem <= 15) { pts3 = Math.round(w3 * 0.73); det3 = `${margem.toFixed(1)}% (8-15%)`; }
+  else { pts3 = w3; det3 = `${margem.toFixed(1)}% (>15%)`; }
+  breakdown.push({ category: "Margem de Lucro", maxPoints: w3, points: pts3, detail: det3 });
 
-  // 4. Endividamento (150pts) — (PC+PNC)/AT
+  // 4. Endividamento — (PC+PNC)/AT
   const endiv = ativoTotal > 0 ? ((passivoCirculante + passivoNaoCirculante) / ativoTotal) * 100 : 100;
   let pts4 = 0; let det4 = `${endiv.toFixed(1)}%`;
-  if (endiv < 40) { pts4 = 150; det4 += " (<40%)"; }
-  else if (endiv <= 60) { pts4 = 100; det4 += " (40-60%)"; }
-  else if (endiv <= 80) { pts4 = 40; det4 += " (60-80%)"; }
+  if (endiv < 40) { pts4 = w4; det4 += " (<40%)"; }
+  else if (endiv <= 60) { pts4 = Math.round(w4 * 0.67); det4 += " (40-60%)"; }
+  else if (endiv <= 80) { pts4 = Math.round(w4 * 0.27); det4 += " (60-80%)"; }
   else { pts4 = 0; det4 += " (>80%)"; }
-  breakdown.push({ category: "Endividamento", maxPoints: 150, points: pts4, detail: det4 });
+  breakdown.push({ category: "Endividamento", maxPoints: w4, points: pts4, detail: det4 });
 
-  // 5. Comprometimento crédito/PL (100pts)
+  // 5. Comprometimento crédito/PL
   const compPL = patrimonioLiquido > 0 ? (valor / patrimonioLiquido) * 100 : 200;
   let pts5 = 0; let det5 = `${compPL.toFixed(1)}%`;
-  if (compPL < 30) { pts5 = 100; det5 += " (<30%)"; }
-  else if (compPL <= 60) { pts5 = 60; det5 += " (30-60%)"; }
-  else if (compPL <= 100) { pts5 = 20; det5 += " (60-100%)"; }
+  if (compPL < 30) { pts5 = w5; det5 += " (<30%)"; }
+  else if (compPL <= 60) { pts5 = Math.round(w5 * 0.60); det5 += " (30-60%)"; }
+  else if (compPL <= 100) { pts5 = Math.round(w5 * 0.20); det5 += " (60-100%)"; }
   else { pts5 = 0; det5 += " (>100%)"; }
-  breakdown.push({ category: "Comprometimento Crédito/PL", maxPoints: 100, points: pts5, detail: det5 });
+  breakdown.push({ category: "Comprometimento Crédito/PL", maxPoints: w5, points: pts5, detail: det5 });
 
-  // 6. Regularidade faturamento (100pts) — CV
-  let pts6 = 70; let det6 = "";
+  // 6. Regularidade faturamento — CV
+  let pts6 = Math.round(w6 * 0.70); let det6 = "";
   if (cv > 0) {
-    if (cv < 15) { pts6 = 100; det6 = `CV ${cv.toFixed(1)}% (<15%)`; }
-    else if (cv <= 30) { pts6 = 70; det6 = `CV ${cv.toFixed(1)}% (15-30%)`; }
-    else if (cv <= 50) { pts6 = 30; det6 = `CV ${cv.toFixed(1)}% (30-50%)`; }
+    if (cv < 15) { pts6 = w6; det6 = `CV ${cv.toFixed(1)}% (<15%)`; }
+    else if (cv <= 30) { pts6 = Math.round(w6 * 0.70); det6 = `CV ${cv.toFixed(1)}% (15-30%)`; }
+    else if (cv <= 50) { pts6 = Math.round(w6 * 0.30); det6 = `CV ${cv.toFixed(1)}% (30-50%)`; }
     else { pts6 = 0; det6 = `CV ${cv.toFixed(1)}% (>50%)`; }
   } else {
-    // Estimate CV from monthly data
     if (Array.isArray(fatMensal) && fatMensal.length >= 6 && mediaMensal > 0) {
       const vals = fatMensal.map((m: any) => num(m.valor));
       const mean = vals.reduce((a: number, b: number) => a + b, 0) / vals.length;
       const variance = vals.reduce((a: number, b: number) => a + Math.pow(b - mean, 2), 0) / vals.length;
       const estCV = mean > 0 ? (Math.sqrt(variance) / mean) * 100 : 50;
-      if (estCV < 15) { pts6 = 100; det6 = `CV est. ${estCV.toFixed(1)}% (<15%)`; }
-      else if (estCV <= 30) { pts6 = 70; det6 = `CV est. ${estCV.toFixed(1)}% (15-30%)`; }
-      else if (estCV <= 50) { pts6 = 30; det6 = `CV est. ${estCV.toFixed(1)}% (30-50%)`; }
+      if (estCV < 15) { pts6 = w6; det6 = `CV est. ${estCV.toFixed(1)}% (<15%)`; }
+      else if (estCV <= 30) { pts6 = Math.round(w6 * 0.70); det6 = `CV est. ${estCV.toFixed(1)}% (15-30%)`; }
+      else if (estCV <= 50) { pts6 = Math.round(w6 * 0.30); det6 = `CV est. ${estCV.toFixed(1)}% (30-50%)`; }
       else { pts6 = 0; det6 = `CV est. ${estCV.toFixed(1)}% (>50%)`; }
     } else {
       det6 = "CV não informado";
     }
   }
-  breakdown.push({ category: "Regularidade Faturamento", maxPoints: 100, points: pts6, detail: det6 });
+  breakdown.push({ category: "Regularidade Faturamento", maxPoints: w6, points: pts6, detail: det6 });
 
-  // 7. Tempo de mercado (100pts)
-  let pts7 = 40; let det7 = "";
-  if (tempoMercado > 10) { pts7 = 100; det7 = `${tempoMercado} anos (>10)`; }
-  else if (tempoMercado >= 5) { pts7 = 70; det7 = `${tempoMercado} anos (5-10)`; }
-  else if (tempoMercado >= 3) { pts7 = 40; det7 = `${tempoMercado} anos (3-5)`; }
-  else if (tempoMercado >= 1) { pts7 = 20; det7 = `${tempoMercado} anos (1-3)`; }
+  // 7. Tempo de mercado
+  let pts7 = Math.round(w7 * 0.40); let det7 = "";
+  if (tempoMercado > 10) { pts7 = w7; det7 = `${tempoMercado} anos (>10)`; }
+  else if (tempoMercado >= 5) { pts7 = Math.round(w7 * 0.70); det7 = `${tempoMercado} anos (5-10)`; }
+  else if (tempoMercado >= 3) { pts7 = Math.round(w7 * 0.40); det7 = `${tempoMercado} anos (3-5)`; }
+  else if (tempoMercado >= 1) { pts7 = Math.round(w7 * 0.20); det7 = `${tempoMercado} anos (1-3)`; }
   else if (tempoMercado > 0) { pts7 = 0; det7 = `${tempoMercado} anos (<1)`; }
-  else { pts7 = 40; det7 = "Não informado (padrão 3-5)"; }
-  breakdown.push({ category: "Tempo de Mercado", maxPoints: 100, points: pts7, detail: det7 });
+  else { pts7 = Math.round(w7 * 0.40); det7 = "Não informado (padrão 3-5)"; }
+  breakdown.push({ category: "Tempo de Mercado", maxPoints: w7, points: pts7, detail: det7 });
 
-  // 8. PL positivo/crescente (50pts)
+  // 8. PL positivo/crescente
   let pts8 = 0; let det8 = "";
   if (patrimonioLiquido <= 0) { pts8 = 0; det8 = "PL negativo"; }
-  else if (prevBalanco && patrimonioLiquido > plAnterior) { pts8 = 50; det8 = "Positivo e crescente"; }
-  else if (prevBalanco && patrimonioLiquido <= plAnterior) { pts8 = 25; det8 = "Positivo, mas em queda"; }
-  else { pts8 = 25; det8 = "Positivo (sem comparação)"; }
-  breakdown.push({ category: "PL Positivo/Crescente", maxPoints: 50, points: pts8, detail: det8 });
+  else if (prevBalanco && patrimonioLiquido > plAnterior) { pts8 = w8; det8 = "Positivo e crescente"; }
+  else if (prevBalanco && patrimonioLiquido <= plAnterior) { pts8 = Math.round(w8 * 0.50); det8 = "Positivo, mas em queda"; }
+  else { pts8 = Math.round(w8 * 0.50); det8 = "Positivo (sem comparação)"; }
+  breakdown.push({ category: "PL Positivo/Crescente", maxPoints: w8, points: pts8, detail: det8 });
 
   const score = breakdown.reduce((s, b) => s + b.points, 0);
-  const { decision, decisionColor } = makeDecision(score, insufficientData);
+  const { decision, decisionColor } = makeDecision(score, insufficientData, config);
 
   const result: ScoringResult = {
     score, breakdown, decision, decisionColor, insufficientData,
