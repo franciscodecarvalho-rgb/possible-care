@@ -389,11 +389,6 @@ export function scorePJ(
   saveResult(result);
   return result;
 }
-  extractedData: Record<string, any>,
-  valor: number,
-  prazo: number,
-  finalidade: string
-): ScoringResult {
   const config = loadConfig();
   const fp = config.financialParams;
   const breakdown: ScoreBreakdown[] = [];
