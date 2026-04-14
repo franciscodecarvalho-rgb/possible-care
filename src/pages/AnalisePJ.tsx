@@ -74,7 +74,13 @@ const AnalisePJ = () => {
         faturamento: faturamentoData,
       };
 
-      navigate("/preview", { state: { extractedData, tipo: "pj" } });
+      navigate("/preview", {
+        state: {
+          extractedData,
+          tipo: "pj",
+          formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade },
+        },
+      });
     } catch (err) {
       console.error(err);
       toast.error("Não foi possível processar. Tente novamente.");
