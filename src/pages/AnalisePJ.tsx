@@ -64,9 +64,9 @@ const AnalisePJ = () => {
           formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade: "" },
         },
       });
-    } catch (err) {
-      console.error(err);
-      toast.error("Não foi possível processar. Tente novamente.");
+    } catch (err: any) {
+      console.error("AnalisePJ erro completo:", err);
+      toast.error(err?.message || "Erro desconhecido no processamento.");
     } finally {
       setLoading(false);
       setProgressMsg("");
