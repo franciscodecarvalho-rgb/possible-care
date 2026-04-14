@@ -34,6 +34,9 @@ const Resultado = () => {
   useEffect(() => {
     if (location.state?.fromHistory) {
       setResult(location.state.fromHistory as ScoringResult);
+      if (location.state?.autoExport) {
+        setTimeout(() => handleExportPDF(), 500);
+      }
       return;
     }
     if (!extractedData || !formData) return;
