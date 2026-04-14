@@ -12,7 +12,7 @@ const Header = () => {
             <FileText className="h-5 w-5 text-navy-foreground" />
           </div>
           <span className="text-lg font-semibold text-navy-foreground">
-            Analisador de Crédito
+            Analisador de Crédito - POSSIBLE
           </span>
         </Link>
         <nav className="flex items-center gap-1">
