@@ -1,8 +1,15 @@
-import { Link, useLocation } from "react-router-dom";
-import { FileText, History, Settings } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { FileText, History, Settings, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("app_authenticated");
+    navigate("/login");
+  };
 
   return (
     <header className="border-b bg-navy">
@@ -49,6 +56,17 @@ const Header = () => {
             <Settings className="h-4 w-4" />
             Configurações
           </Link>
+          <div className="ml-2 border-l border-navy-light/50 pl-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-navy-foreground/70 hover:bg-navy-light/50 hover:text-navy-foreground"
+            >
+              <LogOut className="mr-1 h-4 w-4" />
+              Sair
+            </Button>
+          </div>
         </nav>
       </div>
     </header>

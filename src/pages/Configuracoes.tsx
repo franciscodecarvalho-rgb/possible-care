@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
-  Lock, LockOpen, ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle, Shield
+  Lock, LockOpen, ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle, Shield,
 } from "lucide-react";
 import {
   ScoringConfig, CriterionConfig, CustomCriterion, DecisionBand,
@@ -17,6 +17,7 @@ import {
   getAdminPassword, setAdminPassword, isConfigAuthenticated, setConfigAuthenticated,
   validateRanges, validateDecisionBands,
 } from "@/lib/scoringConfig";
+import BackButton from "@/components/BackButton";
 
 // ─── Password Modal ─────────────────────────────
 function PasswordModal({ onSuccess }: { onSuccess: () => void }) {
@@ -425,7 +426,10 @@ export default function Configuracoes() {
       {/* Lock bar */}
       <div className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur">
         <div className="container mx-auto flex items-center justify-between px-6 py-2">
-          <h1 className="text-lg font-semibold text-foreground">Configurações do Motor de Pontuação</h1>
+          <div className="flex items-center gap-2">
+            <BackButton to="/" />
+            <h1 className="text-lg font-semibold text-foreground">Configurações do Motor de Pontuação</h1>
+          </div>
           <div className="flex items-center gap-3">
             {hasChanges && (
               <Badge variant="destructive" className="text-xs">Alterações não salvas</Badge>

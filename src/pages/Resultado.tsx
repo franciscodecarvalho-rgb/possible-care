@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, FileText, Home, Download } from "lucide-react";
+import { FileText, Download } from "lucide-react";
+import BackButton from "@/components/BackButton";
 import { useEffect, useRef, useState } from "react";
 import { scorePF, scorePJ, type ScoringResult } from "@/lib/creditScoring";
 import { generateAnalysis } from "@/lib/reportAnalysis";
@@ -87,9 +88,7 @@ const Resultado = () => {
         <main className="container mx-auto flex max-w-2xl flex-col items-center px-6 py-24 text-center">
           <FileText className="h-12 w-12 text-muted-foreground" />
           <p className="mt-4 text-muted-foreground">Nenhum dado para exibir.</p>
-          <Button variant="outline" className="mt-4" onClick={() => navigate("/")}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-          </Button>
+          <BackButton to="/" />
         </main>
       </div>
     );
@@ -107,9 +106,7 @@ const Resultado = () => {
       <main className="container mx-auto max-w-4xl px-4 py-8">
         {/* Action bar */}
         <div className="mb-6 flex items-center justify-between">
-          <Button variant="outline" size="sm" onClick={() => navigate("/")}>
-            <Home className="mr-2 h-4 w-4" /> Início
-          </Button>
+          <BackButton to={location.state?.fromHistory ? "/historico" : "/preview"} />
           <div className="flex gap-3">
             <Button variant="outline" size="sm" onClick={() => navigate("/historico")}>
               Ver Histórico
