@@ -1,19 +1,29 @@
-import * as pdfjsLib from "pdfjs-dist";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-
 export async function pdfToBase64Images(file: File): Promise<string[]> {
+  const pdfjsLib = (window as Window & { pdfjsLib?: any }).pdfjsLib;
+
+  if (!pdfjsLib) {
+    throw new Error("PDF.js não foi carregado no navegador.");
+  }
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const images: string[] = [];
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 2 });
+    const scale = 2;
+    const viewport = page.getViewport({ scale });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("Não foi possível inicializar o canvas para renderizar o PDF.");
+    }
+
     await page.render({ canvasContext: ctx, viewport }).promise;
     images.push(canvas.toDataURL("image/png").split(",")[1]);
   }
