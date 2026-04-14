@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { FileText, History } from "lucide-react";
+import { FileText, History, Settings } from "lucide-react";
 
 const Header = () => {
   const location = useLocation();
@@ -37,6 +37,17 @@ const Header = () => {
           >
             <History className="h-4 w-4" />
             Histórico
+          </Link>
+          <Link
+            to="/configuracoes"
+            className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              location.pathname === "/configuracoes"
+                ? "bg-navy-light text-navy-foreground"
+                : "text-navy-foreground/70 hover:bg-navy-light/50 hover:text-navy-foreground"
+            }`}
+          >
+            <Settings className="h-4 w-4" />
+            Configurações
           </Link>
         </nav>
       </div>

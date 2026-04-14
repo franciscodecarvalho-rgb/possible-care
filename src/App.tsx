@@ -9,6 +9,7 @@ import AnalisePJ from "./pages/AnalisePJ";
 import Preview from "./pages/Preview";
 import Resultado from "./pages/Resultado";
 import Historico from "./pages/Historico";
+import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/preview" element={<Preview />} />
           <Route path="/resultado" element={<Resultado />} />
           <Route path="/historico" element={<Historico />} />
+          <Route path="/configuracoes" element={<Configuracoes />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
