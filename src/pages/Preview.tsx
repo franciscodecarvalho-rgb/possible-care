@@ -124,9 +124,7 @@ const Preview = () => {
         <Header />
         <main className="container mx-auto flex max-w-2xl flex-col items-center px-6 py-24 text-center">
           <p className="text-muted-foreground">Nenhum dado para exibir.</p>
-          <Button variant="outline" className="mt-4" onClick={() => navigate("/")}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-          </Button>
+          <BackButton to="/" />
         </main>
       </div>
     );
