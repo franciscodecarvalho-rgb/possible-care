@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText, Home, Download } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { scorePF, type ScoringResult } from "@/lib/creditScoring";
+import { scorePF, scorePJ, type ScoringResult } from "@/lib/creditScoring";
 import { generateAnalysis } from "@/lib/reportAnalysis";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
