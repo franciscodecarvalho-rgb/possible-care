@@ -40,6 +40,9 @@ const Resultado = () => {
     if (tipo === "pf") {
       const r = scorePF(extractedData, formData.valor, formData.prazo, formData.finalidade);
       setResult(r);
+    } else if (tipo === "pj") {
+      const r = scorePJ(extractedData, formData.valor, formData.prazo, formData.finalidade);
+      setResult(r);
     }
   }, []);
 
