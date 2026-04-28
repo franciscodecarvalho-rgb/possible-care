@@ -2,6 +2,7 @@
 // Reads configurable parameters from localStorage via scoringConfig
 
 import { loadConfig, type ScoringConfig } from "./scoringConfig";
+import { saveHistoryResult } from "./historyStorage";
 
 export interface ScoreBreakdown {
   category: string;
@@ -75,9 +76,7 @@ function makeDecision(score: number, insufficientData: boolean, config: ScoringC
 }
 
 function saveResult(result: ScoringResult) {
-  const history = JSON.parse(localStorage.getItem("credit_history") || "[]");
-  history.unshift(result);
-  localStorage.setItem("credit_history", JSON.stringify(history));
+  saveHistoryResult(result);
 }
 
 // ===================== PF SCORING =====================
