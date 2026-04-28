@@ -4,7 +4,7 @@ import { FileText, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const APP_PASSWORD = "1234";
+const APP_PASSWORD = "Possible";
 
 const Login = () => {
   const navigate = useNavigate();
