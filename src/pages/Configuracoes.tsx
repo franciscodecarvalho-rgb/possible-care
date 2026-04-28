@@ -1,70 +1,22 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import Header from "@/components/Header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
-  Lock, LockOpen, ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle, Shield,
+  ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle,
 } from "lucide-react";
 import {
   ScoringConfig, CriterionConfig, CustomCriterion, DecisionBand,
   DEFAULT_CONFIG, loadConfig, saveConfig, resetConfig, exportConfig, importConfig,
-  getAdminPassword, setAdminPassword, isConfigAuthenticated, setConfigAuthenticated,
   validateRanges, validateDecisionBands,
 } from "@/lib/scoringConfig";
 import BackButton from "@/components/BackButton";
-
-// ─── Password Modal ─────────────────────────────
-function PasswordModal({ onSuccess }: { onSuccess: () => void }) {
-  const [pwd, setPwd] = useState("");
-  const [error, setError] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pwd === getAdminPassword()) {
-      setConfigAuthenticated(true);
-      onSuccess();
-    } else {
-      setError(true);
-      setPwd("");
-      inputRef.current?.focus();
-    }
-  };
-
-  return (
-    <Dialog open={true}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" /> Acesso Restrito
-          </DialogTitle>
-          <DialogDescription>
-            Área de configuração do motor de pontuação. Insira a senha de administrador.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            ref={inputRef}
-            type="password"
-            placeholder="Senha de administrador"
-            value={pwd}
-            onChange={(e) => { setPwd(e.target.value); setError(false); }}
-          />
-          {error && <p className="text-sm font-medium text-destructive">Senha incorreta</p>}
-          <Button type="submit" className="w-full">Acessar</Button>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ─── Criteria Editor (weights + expandable ranges) ──────
 function CriteriaEditor({
