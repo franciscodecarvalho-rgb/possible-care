@@ -11,11 +11,15 @@ import BackButton from "@/components/BackButton";
 import { toast } from "sonner";
 import { extractFromFiles } from "@/lib/extractionService";
 import { PJ_BALANCO_PROMPT, PJ_FATURAMENTO_PROMPT } from "@/lib/pdfExtractor";
+import { loadConfig } from "@/lib/scoringConfig";
 
 const AnalisePJ = () => {
   const navigate = useNavigate();
+  const defaultPrazo = String(loadConfig().financialParams.prazoPadrao || 24);
+  const [nome, setNome] = useState("");
+  const [documento, setDocumento] = useState("");
   const [valor, setValor] = useState("");
-  const [prazo, setPrazo] = useState("");
+  const [prazo, setPrazo] = useState(defaultPrazo);
   const [uploadOption, setUploadOption] = useState<"balancos" | "faturamento">("balancos");
   const [balancosFiles, setBalancosFiles] = useState<File[]>([]);
   const [faturamentoFiles, setFaturamentoFiles] = useState<File[]>([]);
@@ -26,6 +30,8 @@ const AnalisePJ = () => {
   const validate = () => {
     const e: Record<string, string> = {};
     const v = parseFloat(valor);
+    if (!nome.trim()) e.nome = "Informe a razão social.";
+    if (!documento.trim()) e.documento = "Informe o CNPJ.";
     if (!valor || isNaN(v) || v <= 0) e.valor = "Informe um valor maior que zero.";
     if (!prazo || parseInt(prazo) <= 0) e.prazo = "Informe um prazo válido.";
     if (uploadOption === "balancos" && balancosFiles.length === 0)
@@ -57,6 +63,13 @@ const AnalisePJ = () => {
         extractedData = { faturamento: faturamentoData, pjDocType: "faturamento" };
       }
 
+      extractedData = {
+        ...extractedData,
+        razao_social: nome.trim(),
+        nome_completo: nome.trim(),
+        cnpj: documento.trim(),
+      };
+
       navigate("/preview", {
         state: {
           extractedData,
@@ -84,6 +97,34 @@ const AnalisePJ = () => {
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="nome">Nome completo / Razão Social</Label>
+            <Input
+              id="nome"
+              type="text"
+              placeholder="Razão social da empresa"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              className={errors.nome ? "border-destructive" : ""}
+              disabled={loading}
+            />
+            {errors.nome && <p className="text-xs text-destructive">{errors.nome}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="documento">CPF / CNPJ</Label>
+            <Input
+              id="documento"
+              type="text"
+              placeholder="CNPJ da empresa"
+              value={documento}
+              onChange={(e) => setDocumento(e.target.value)}
+              className={errors.documento ? "border-destructive" : ""}
+              disabled={loading}
+            />
+            {errors.documento && <p className="text-xs text-destructive">{errors.documento}</p>}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="valor">Valor do crédito solicitado (R$)</Label>
             <Input
@@ -155,9 +196,9 @@ const AnalisePJ = () => {
             )}
           </div>
 
-          <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
-            <p className="text-sm text-destructive">
+          <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-4">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <p className="text-sm text-primary">
               Todos os documentos devem estar assinados pela administração e pelo contador com
               registro ativo no CRC.
             </p>
@@ -180,6 +221,26 @@ const AnalisePJ = () => {
           </Button>
         </form>
       </main>
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-foreground">Processando análise</h2>
+            <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+              {[
+                "📄 Lendo documento...",
+                "🤖 Extraindo dados...",
+                "📊 Calculando score...",
+                "✅ Gerando relatório...",
+              ].map((step, index) => (
+                <div key={step} className={`rounded-md border px-3 py-2 ${progressMsg || index === 0 ? "bg-muted/50 text-foreground" : "opacity-70"}`}>
+                  {step}
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground">{progressMsg || "Iniciando processamento..."}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
