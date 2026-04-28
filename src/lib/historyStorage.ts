@@ -36,6 +36,17 @@ export const persistHistory = (history: ScoringResult[]) => {
 };
 
 export const saveHistoryResult = (result: ScoringResult) => {
-  const history = loadHistory().filter((item) => item.protocolo !== result.protocolo);
+  const history = loadHistory();
+  const existing = history.find((item) =>
+    item.analysisKey ? item.analysisKey === result.analysisKey : item.protocolo === result.protocolo
+  );
+
+  if (existing) {
+    persistHistory(history.map((item) =>
+      item.protocolo === existing.protocolo ? { ...result, protocolo: existing.protocolo, data: existing.data } : item
+    ));
+    return;
+  }
+
   persistHistory([result, ...history]);
 };
