@@ -44,10 +44,12 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: "Você é um especialista em análise de documentos financeiros brasileiros. Retorne EXCLUSIVAMENTE JSON válido, sem texto adicional, sem markdown.",
+            content: "Você é um extrator determinístico de dados financeiros brasileiros. Extraia somente valores explicitamente presentes no documento; não estime, não infera e não escolha valores aproximados. Use null para campos ausentes. Retorne EXCLUSIVAMENTE JSON válido, sem texto adicional, sem markdown, mantendo sempre os mesmos nomes de campos do prompt.",
           },
           { role: "user", content },
         ],
+        temperature: 0,
+        top_p: 0,
         max_tokens: 4000,
       }),
     });
