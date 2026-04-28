@@ -17,9 +17,8 @@ import {
 import { Inbox, Eye, Download, Trash2, Filter } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { toast } from "sonner";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import type { ScoringResult } from "@/lib/creditScoring";
+import { loadHistory, persistHistory } from "@/lib/historyStorage";
 
 const decisionOptions = [
   "CRÉDITO APROVADO",
@@ -44,11 +43,7 @@ const Historico = () => {
   const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem("credit_history");
-    if (raw) {
-      const parsed = JSON.parse(raw) as ScoringResult[];
-      setHistory(parsed);
-    }
+    setHistory(loadHistory());
   }, []);
 
   useEffect(() => {
@@ -70,8 +65,9 @@ const Historico = () => {
   const handleDelete = () => {
     if (deleteIdx === null) return;
     const item = filteredHistory[deleteIdx];
+    if (!item) return;
     const newHistory = history.filter((r) => r.protocolo !== item.protocolo);
-    localStorage.setItem("credit_history", JSON.stringify(newHistory));
+    persistHistory(newHistory);
     setHistory(newHistory);
     setDeleteIdx(null);
     toast.success("Análise excluída.");
