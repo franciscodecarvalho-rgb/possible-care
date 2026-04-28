@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import Header from "@/components/Header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
-  ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle,
+  ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle, HelpCircle, Pencil,
 } from "lucide-react";
 import {
   ScoringConfig, CriterionConfig, CustomCriterion, DecisionBand,
@@ -17,6 +18,24 @@ import {
   validateRanges, validateDecisionBands,
 } from "@/lib/scoringConfig";
 import BackButton from "@/components/BackButton";
+
+const CRITERION_HELP: Record<string, string> = {
+  "Comprometimento de Renda": "Avalia quanto a parcela estimada consome da renda mensal identificada nos documentos.",
+  "Evolução Patrimonial": "Compara a variação do patrimônio declarado com a renda anual informada.",
+  "Patrimônio vs Renda": "Mede a relação entre bens declarados e renda anual para avaliar lastro financeiro.",
+  "Endividamento": "Analisa dívidas em relação ao patrimônio ou ativos disponíveis.",
+  "Estabilidade de Renda": "Verifica quantidade e qualidade das fontes de renda extraídas.",
+  "Posse de Bens Reais": "Pontua a presença de bens como imóvel e veículo nos documentos.",
+  "Coerência Tributária": "Confere se imposto, alíquota e renda declarada são consistentes.",
+  "Liquidez Corrente": "Calcula ativo circulante dividido pelo passivo circulante nos balanços.",
+  "Evolução Faturamento": "Compara o faturamento recente com períodos anteriores para medir crescimento.",
+  "Margem de Lucro": "Calcula lucro líquido sobre receita para avaliar rentabilidade.",
+  "Comprometimento Crédito/PL": "Mede o crédito solicitado em relação ao patrimônio líquido da empresa.",
+  "Regularidade Faturamento": "Avalia a estabilidade mensal do faturamento pelo coeficiente de variação.",
+  "Tempo de Mercado": "Pontua empresas com maior histórico operacional.",
+  "PL Positivo/Crescente": "Verifica se o patrimônio líquido é positivo e evolui entre balanços.",
+  "Diversificação de Receitas": "Avalia se a receita depende de poucos clientes/fontes ou é distribuída.",
+};
 
 // ─── Criteria Editor (weights + expandable ranges) ──────
 function CriteriaEditor({
