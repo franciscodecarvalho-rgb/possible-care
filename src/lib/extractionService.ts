@@ -3,6 +3,17 @@ import { pdfToBase64Images } from "./pdfExtractor";
 
 type ProgressCallback = (msg: string) => void;
 
+const sortObjectKeys = (value: any): any => {
+  if (Array.isArray(value)) return value.map(sortObjectKeys);
+  if (value && typeof value === "object") {
+    return Object.keys(value).sort().reduce<Record<string, any>>((acc, key) => {
+      acc[key] = sortObjectKeys(value[key]);
+      return acc;
+    }, {});
+  }
+  return value;
+};
+
 export async function extractFromFiles(
   files: File[],
   promptText: string,
@@ -56,7 +67,7 @@ export async function extractFromFiles(
       throw new Error(`IA não retornou JSON válido. Resposta: ${extracted.raw_text.substring(0, 200)}...`);
     }
     onProgress?.("Processamento concluído.");
-    return extracted;
+    return sortObjectKeys(extracted);
   } catch (err: any) {
     console.error("Erro ao interpretar dados extraídos:", err);
     throw new Error(`Erro ao interpretar dados extraídos: ${err?.message || String(err)}`);
