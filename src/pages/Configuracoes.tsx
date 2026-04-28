@@ -268,17 +268,26 @@ function CriteriaEditor({
 
 // ─── Add Custom Criterion Dialog ────────────────
 function AddCustomDialog({
-  open, onOpenChange, onAdd,
-}: { open: boolean; onOpenChange: (v: boolean) => void; onAdd: (c: CustomCriterion) => void }) {
+  open, onOpenChange, onAdd, editCriterion,
+}: { open: boolean; onOpenChange: (v: boolean) => void; onAdd: (c: CustomCriterion) => void; editCriterion?: CustomCriterion | null }) {
   const [name, setName] = useState("");
   const [maxPoints, setMaxPoints] = useState(50);
   const [calcType, setCalcType] = useState<"boolean" | "ranges">("boolean");
   const [applicableTo, setApplicableTo] = useState<("pfIrpf" | "pfComprovantes" | "pj")[]>(["pfIrpf"]);
   const [referenceField, setReferenceField] = useState("");
 
+  useEffect(() => {
+    if (!open) return;
+    setName(editCriterion?.name || "");
+    setMaxPoints(editCriterion?.maxPoints || 50);
+    setCalcType(editCriterion?.calcType || "boolean");
+    setApplicableTo(editCriterion?.applicableTo || ["pfIrpf"]);
+    setReferenceField(editCriterion?.referenceField || "");
+  }, [open, editCriterion]);
+
   const handleAdd = () => {
     if (!name.trim()) return;
-    const id = `custom_${Date.now()}`;
+    const id = editCriterion?.id || `custom_${Date.now()}`;
     const ranges: CustomCriterion["ranges"] = calcType === "boolean"
       ? [{ label: "Não", min: 0, max: 1, percentage: 0 }, { label: "Sim", min: 1, max: 2, percentage: 100 }]
       : [
@@ -286,7 +295,7 @@ function AddCustomDialog({
         { label: "Médio", min: 33, max: 66, percentage: 50 },
         { label: "Alto", min: 66, max: 100, percentage: 100 },
       ];
-    onAdd({ id, name: name.trim(), maxPoints, ranges, calcType, applicableTo, referenceField });
+    onAdd({ id, name: name.trim(), maxPoints, ranges: editCriterion?.ranges || ranges, calcType, applicableTo, referenceField });
     setName(""); setMaxPoints(50); setCalcType("boolean"); setApplicableTo(["pfIrpf"]); setReferenceField("");
     onOpenChange(false);
   };
@@ -299,7 +308,7 @@ function AddCustomDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Adicionar Critério Customizado</DialogTitle>
+          <DialogTitle>{editCriterion ? "Editar Critério Customizado" : "Adicionar Critério Customizado"}</DialogTitle>
           <DialogDescription>Critérios customizados dependem de dados que a IA consiga extrair dos documentos.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -336,7 +345,7 @@ function AddCustomDialog({
             <Input value={referenceField} onChange={(e) => setReferenceField(e.target.value)}
               placeholder="Descreva qual dado da extração usar" />
           </div>
-          <Button onClick={handleAdd} disabled={!name.trim()} className="w-full">Adicionar</Button>
+          <Button onClick={handleAdd} disabled={!name.trim()} className="w-full">{editCriterion ? "Salvar alterações" : "Adicionar"}</Button>
         </div>
       </DialogContent>
     </Dialog>
