@@ -1,11 +1,16 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { FileText, Download } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { FileText, Download, SlidersHorizontal } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { useEffect, useRef, useState } from "react";
 import { scorePF, scorePJ, type ScoringResult } from "@/lib/creditScoring";
 import { generateAnalysis } from "@/lib/reportAnalysis";
+import { loadHistory, persistHistory } from "@/lib/historyStorage";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
@@ -27,6 +32,9 @@ const Resultado = () => {
   const reportRef = useRef<HTMLDivElement>(null);
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustPoints, setAdjustPoints] = useState(0);
+  const [adjustJustification, setAdjustJustification] = useState("");
 
   const extractedData = location.state?.extractedData as Record<string, any> | undefined;
   const tipo = (location.state?.tipo as string) || "pf";
@@ -81,6 +89,25 @@ const Resultado = () => {
     }
   };
 
+  const handleManualAdjust = () => {
+    if (!result || !adjustJustification.trim()) {
+      toast.error("Informe a justificativa do ajuste manual.");
+      return;
+    }
+    const originalScore = result.originalScore ?? result.score;
+    const score = Math.max(0, Math.min(1000, originalScore + adjustPoints));
+    const next = {
+      ...result,
+      originalScore,
+      score,
+      manualAdjustment: { points: adjustPoints, justification: adjustJustification.trim(), adjustedAt: new Date().toISOString() },
+    };
+    setResult(next);
+    persistHistory(loadHistory().map((item) => item.protocolo === next.protocolo ? next : item));
+    setAdjustOpen(false);
+    toast.success("Ajuste manual registrado no relatório.");
+  };
+
   if (!extractedData && !location.state?.fromHistory) {
     return (
       <div className="min-h-screen bg-background">
@@ -110,6 +137,9 @@ const Resultado = () => {
           <div className="flex gap-3">
             <Button variant="outline" size="sm" onClick={() => navigate("/historico")}>
               Ver Histórico
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAdjustOpen(true)}>
+              <SlidersHorizontal className="mr-2 h-4 w-4" /> Ajustar Score Manualmente
             </Button>
             <Button
               size="sm"
@@ -224,6 +254,7 @@ const Resultado = () => {
                   <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 600, color: "#374151" }}>Critério</th>
                   <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "60px" }}>Máx</th>
                   <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "60px" }}>Obtido</th>
+                  <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "80px" }}>% Aproveit.</th>
                   <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "140px" }}>Desempenho</th>
                 </tr>
               </thead>
@@ -235,6 +266,7 @@ const Resultado = () => {
                       <td style={{ padding: "6px 8px" }}>{b.category}</td>
                       <td style={{ textAlign: "center", padding: "6px 8px", color: "#6b7280" }}>{b.maxPoints}</td>
                       <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600 }}>{b.points}</td>
+                      <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600 }}>{Math.round(pct)}%</td>
                       <td style={{ padding: "6px 8px" }}>
                         <div style={{ background: "#e5e7eb", borderRadius: "4px", height: "8px", overflow: "hidden" }}>
                           <div style={{ width: `${pct}%`, height: "100%", borderRadius: "4px", backgroundColor: barColor(pct) }} />
@@ -247,11 +279,21 @@ const Resultado = () => {
                   <td style={{ padding: "6px 8px" }}>TOTAL</td>
                   <td style={{ textAlign: "center", padding: "6px 8px" }}>1000</td>
                   <td style={{ textAlign: "center", padding: "6px 8px", color: result.decisionColor }}>{result.score}</td>
+                  <td style={{ textAlign: "center", padding: "6px 8px", color: result.decisionColor }}>{Math.round((result.score / 1000) * 100)}%</td>
                   <td />
                 </tr>
               </tbody>
             </table>
           </div>
+
+          {result.manualAdjustment && (
+            <div style={{ marginTop: "14px", borderTop: "1px solid #e5e7eb", paddingTop: "10px" }}>
+              <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Nota de Auditoria — Ajuste Manual</p>
+              <p style={{ fontSize: "10px", color: "#374151", margin: 0 }}>
+                Score original: {result.originalScore} | Ajuste: {result.manualAdjustment.points > 0 ? "+" : ""}{result.manualAdjustment.points} pontos | Justificativa: {result.manualAdjustment.justification}
+              </p>
+            </div>
+          )}
 
           {/* RODAPÉ */}
           <div style={{ marginTop: "24px", borderTop: "1px solid #d1d5db", paddingTop: "10px", textAlign: "center" }}>
@@ -273,6 +315,26 @@ const Resultado = () => {
             Nova Análise
           </Button>
         </div>
+
+        <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Ajustar Score Manualmente</DialogTitle>
+              <DialogDescription>Registre uma justificativa para auditoria no relatório.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="adjustPoints">Ajuste de pontos (+/-)</Label>
+                <Input id="adjustPoints" type="number" value={adjustPoints} onChange={(e) => setAdjustPoints(parseInt(e.target.value) || 0)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="adjustJustification">Justificativa</Label>
+                <Textarea id="adjustJustification" value={adjustJustification} onChange={(e) => setAdjustJustification(e.target.value)} placeholder="Descreva o motivo do ajuste manual" />
+              </div>
+              <Button className="w-full" onClick={handleManualAdjust}>Registrar ajuste</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
