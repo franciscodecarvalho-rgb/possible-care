@@ -80,7 +80,19 @@ function CriteriaEditor({
         return (
           <div key={c.id} className="rounded-lg border border-border bg-card">
             <div className="flex items-center gap-3 px-4 py-3">
-              <span className="flex-1 text-sm font-medium text-foreground">{c.name}</span>
+              <span className="flex flex-1 items-center gap-2 text-sm font-medium text-foreground">
+                {c.name}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="h-4 w-4 cursor-help text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      {CRITERION_HELP[c.name] || "Critério calculado a partir dos dados extraídos dos documentos enviados."}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </span>
               <Input
                 type="number" min={0} max={1000}
                 className="w-24 text-center"
@@ -145,7 +157,19 @@ function CriteriaEditor({
           <div key={cc.id} className="rounded-lg border border-dashed border-primary/40 bg-card">
             <div className="flex items-center gap-3 px-4 py-3">
               <Badge variant="outline" className="text-xs">Custom</Badge>
-              <span className="flex-1 text-sm font-medium text-foreground">{cc.name}</span>
+              <span className="flex flex-1 items-center gap-2 text-sm font-medium text-foreground">
+                {cc.name}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="h-4 w-4 cursor-help text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      Critério customizado calculado a partir do campo: {cc.referenceField || "referência não definida"}.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </span>
               <Input
                 type="number" min={0} max={1000} className="w-24 text-center"
                 value={cc.maxPoints}
