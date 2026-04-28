@@ -18,7 +18,6 @@ export interface ScoringResult {
   decisionColor: string;
   insufficientData: boolean;
   protocolo: string;
-  analysisKey?: string;
   data: string;
   tipo: string;
   pjDocType?: "balancos" | "faturamento";
@@ -26,30 +25,10 @@ export interface ScoringResult {
   formData: { valor: number; prazo: number; finalidade: string };
 }
 
-const stableStringify = (value: any): string => {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-};
-
-const hashString = (value: string): string => {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return Math.abs(hash >>> 0).toString(36).toUpperCase().padStart(6, "0").slice(0, 6);
-};
-
-const buildAnalysisKey = (tipo: string, extractedData: Record<string, any>, formData: Record<string, any>, config: ScoringConfig): string =>
-  hashString(stableStringify({ tipo, extractedData, formData, config }));
-
-const generateProtocolo = (analysisKey: string): string => {
+const generateProtocolo = (): string => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = analysisKey;
-  while (code.length < 6) code += chars[code.length % chars.length];
+  let code = "";
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return `AC-${code}`;
 };
 
@@ -200,10 +179,9 @@ export function scorePF(
   const score = breakdown.reduce((s, b) => s + b.points, 0);
   const { decision, decisionColor } = makeDecision(score, insufficientData, config);
 
-  const analysisKey = buildAnalysisKey("pf", extractedData, { valor, prazo, finalidade }, config);
   const result: ScoringResult = {
     score, breakdown, decision, decisionColor, insufficientData,
-    protocolo: generateProtocolo(analysisKey), analysisKey, data: new Date().toISOString(), tipo: "pf",
+    protocolo: generateProtocolo(), data: new Date().toISOString(), tipo: "pf",
     extractedData, formData: { valor, prazo, finalidade },
   };
   saveResult(result);
@@ -401,10 +379,9 @@ export function scorePJ(
   const score = breakdown.reduce((s, b) => s + b.points, 0);
   const { decision, decisionColor } = makeDecision(score, insufficientData, config);
 
-  const analysisKey = buildAnalysisKey("pj", extractedData, { valor, prazo, finalidade }, config);
   const result: ScoringResult = {
     score, breakdown, decision, decisionColor, insufficientData,
-    protocolo: generateProtocolo(analysisKey), analysisKey, data: new Date().toISOString(), tipo: "pj",
+    protocolo: generateProtocolo(), data: new Date().toISOString(), tipo: "pj",
     pjDocType,
     extractedData, formData: { valor, prazo, finalidade },
   };
