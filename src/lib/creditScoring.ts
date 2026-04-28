@@ -13,6 +13,8 @@ export interface ScoreBreakdown {
 
 export interface ScoringResult {
   score: number;
+  originalScore?: number;
+  manualAdjustment?: { points: number; justification: string; adjustedAt: string };
   breakdown: ScoreBreakdown[];
   decision: string;
   decisionColor: string;
@@ -249,6 +251,13 @@ export function scorePJ(
   const mediaMensal = num(faturamento.media_mensal);
   const cv = num(faturamento.coeficiente_variacao_percentual);
   const tempoMercado = num(extractedData.tempo_mercado_anos) || num(extractedData.balancos?.tempo_mercado_anos) || 0;
+  const fontesReceita =
+    num(extractedData.numero_fontes_receita) ||
+    num(extractedData.numero_clientes) ||
+    num(faturamento.numero_clientes) ||
+    (Array.isArray(faturamento.clientes_principais) ? faturamento.clientes_principais.length : 0) ||
+    (Array.isArray(lastBalanco.fontes_receita) ? lastBalanco.fontes_receita.length : 0) ||
+    (Array.isArray(extractedData.fontes_receita) ? extractedData.fontes_receita.length : 0);
 
   // Determine key fields based on doc type for insufficiency check
   const keyVals = pjDocType === "balancos"
@@ -374,6 +383,15 @@ export function scorePJ(
     else if (prevBalanco && patrimonioLiquido <= plAnterior) { pts8 = Math.round(w8 * 0.50); det8 = "Positivo, mas em queda"; }
     else { pts8 = Math.round(w8 * 0.50); det8 = "Positivo (sem comparação)"; }
     breakdown.push({ category: "PL Positivo/Crescente", maxPoints: w8, points: pts8, detail: det8 });
+  }
+
+  // 9. Diversificação de receitas (always active)
+  const w9 = getWeight("pj_diversificacao_receitas");
+  if (w9 > 0) {
+    let pts9 = Math.round(w9 * 0.20); let det9 = "Receita concentrada ou não informada";
+    if (fontesReceita >= 4) { pts9 = w9; det9 = `${fontesReceita} fontes/clientes relevantes`; }
+    else if (fontesReceita >= 2) { pts9 = Math.round(w9 * 0.60); det9 = `${fontesReceita} fontes/clientes relevantes`; }
+    breakdown.push({ category: "Diversificação de Receitas", maxPoints: w9, points: pts9, detail: det9 });
   }
 
   const score = breakdown.reduce((s, b) => s + b.points, 0);

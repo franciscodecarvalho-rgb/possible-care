@@ -14,7 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Inbox, Eye, Download, Trash2, Filter } from "lucide-react";
+import { Inbox, Eye, Download, Trash2, Filter, GitCompare } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { toast } from "sonner";
 import type { ScoringResult } from "@/lib/creditScoring";
@@ -32,6 +32,7 @@ const Historico = () => {
   const navigate = useNavigate();
   const [history, setHistory] = useState<ScoringResult[]>([]);
   const [filteredHistory, setFilteredHistory] = useState<ScoringResult[]>([]);
+  const [compareProtocols, setCompareProtocols] = useState<string[]>([]);
 
   // Filters
   const [filterTipo, setFilterTipo] = useState("todos");
@@ -106,6 +107,18 @@ const Historico = () => {
   };
 
   const hasFilters = filterTipo !== "todos" || filterDecisao !== "todos" || filterDe || filterAte;
+  const metrics = {
+    total: history.length,
+    aprovadas: history.length ? Math.round((history.filter(r => r.decision === "CRÉDITO APROVADO").length / history.length) * 100) : 0,
+    ressalvas: history.length ? Math.round((history.filter(r => r.decision === "APROVADO COM RESSALVAS").length / history.length) * 100) : 0,
+    reprovadas: history.length ? Math.round((history.filter(r => r.decision.includes("REPROVADO")).length / history.length) * 100) : 0,
+    scoreMedio: history.length ? Math.round(history.reduce((s, r) => s + r.score, 0) / history.length) : 0,
+  };
+  const compareItems = compareProtocols.map((p) => history.find((r) => r.protocolo === p)).filter(Boolean) as ScoringResult[];
+  const getNome = (r: ScoringResult) => r.extractedData?.nome_completo || r.extractedData?.razao_social || r.extractedData?.representante?.nome || "—";
+  const toggleCompare = (protocolo: string) => {
+    setCompareProtocols(prev => prev.includes(protocolo) ? prev.filter(p => p !== protocolo) : prev.length < 2 ? [...prev, protocolo] : [prev[1], protocolo]);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -116,6 +129,21 @@ const Historico = () => {
         <p className="mt-1 text-sm text-muted-foreground">
           Consulte as análises de crédito realizadas
         </p>
+
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            ["Total", metrics.total],
+            ["% Aprovadas", `${metrics.aprovadas}%`],
+            ["% Ressalvas", `${metrics.ressalvas}%`],
+            ["% Reprovadas", `${metrics.reprovadas}%`],
+            ["Score médio", metrics.scoreMedio],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border bg-card p-4">
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+            </div>
+          ))}
+        </div>
 
         {/* Filters */}
         <div className="mt-6 rounded-lg border bg-card p-4">
@@ -166,11 +194,41 @@ const Historico = () => {
           )}
         </div>
 
+        {compareItems.length === 2 && (
+          <div className="mt-6 rounded-lg border bg-card p-4">
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+              <GitCompare className="h-4 w-4" /> Comparativo entre análises
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {compareItems.map((item) => (
+                <div key={item.protocolo} className="rounded-lg border bg-muted/30 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-foreground">{getNome(item)}</p>
+                      <p className="text-xs text-muted-foreground">{item.protocolo}</p>
+                    </div>
+                    <span className="text-2xl font-bold" style={{ color: item.decisionColor }}>{item.score}</span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {item.breakdown.map((b) => (
+                      <div key={b.category} className="flex justify-between gap-3 text-xs">
+                        <span className="text-muted-foreground">{b.category}</span>
+                        <span className="font-medium text-foreground">{b.points}/{b.maxPoints}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         <div className="mt-6 rounded-lg border bg-card overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                  <TableHead>Comparar</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead>Protocolo</TableHead>
                 <TableHead>Nome</TableHead>
@@ -183,7 +241,7 @@ const Historico = () => {
             <TableBody>
               {filteredHistory.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center">
+                  <TableCell colSpan={8} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Inbox className="h-8 w-8" />
                       <span>{history.length === 0 ? "Nenhuma análise realizada ainda" : "Nenhum resultado com esses filtros"}</span>
@@ -192,9 +250,14 @@ const Historico = () => {
                 </TableRow>
               ) : (
                 filteredHistory.map((r, i) => {
-                  const nome = r.extractedData?.nome_completo || r.extractedData?.razao_social || r.extractedData?.representante?.nome || "—";
+                  const nome = getNome(r);
                   return (
                     <TableRow key={r.protocolo + i}>
+                      <TableCell>
+                        <Button variant={compareProtocols.includes(r.protocolo) ? "default" : "outline"} size="sm" onClick={() => toggleCompare(r.protocolo)}>
+                          <GitCompare className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {new Date(r.data).toLocaleDateString("pt-BR")}
                       </TableCell>

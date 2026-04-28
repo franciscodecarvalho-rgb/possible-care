@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import Header from "@/components/Header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
-  ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle,
+  ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle, HelpCircle, Pencil,
 } from "lucide-react";
 import {
   ScoringConfig, CriterionConfig, CustomCriterion, DecisionBand,
@@ -17,6 +18,24 @@ import {
   validateRanges, validateDecisionBands,
 } from "@/lib/scoringConfig";
 import BackButton from "@/components/BackButton";
+
+const CRITERION_HELP: Record<string, string> = {
+  "Comprometimento de Renda": "Avalia quanto a parcela estimada consome da renda mensal identificada nos documentos.",
+  "Evolução Patrimonial": "Compara a variação do patrimônio declarado com a renda anual informada.",
+  "Patrimônio vs Renda": "Mede a relação entre bens declarados e renda anual para avaliar lastro financeiro.",
+  "Endividamento": "Analisa dívidas em relação ao patrimônio ou ativos disponíveis.",
+  "Estabilidade de Renda": "Verifica quantidade e qualidade das fontes de renda extraídas.",
+  "Posse de Bens Reais": "Pontua a presença de bens como imóvel e veículo nos documentos.",
+  "Coerência Tributária": "Confere se imposto, alíquota e renda declarada são consistentes.",
+  "Liquidez Corrente": "Calcula ativo circulante dividido pelo passivo circulante nos balanços.",
+  "Evolução Faturamento": "Compara o faturamento recente com períodos anteriores para medir crescimento.",
+  "Margem de Lucro": "Calcula lucro líquido sobre receita para avaliar rentabilidade.",
+  "Comprometimento Crédito/PL": "Mede o crédito solicitado em relação ao patrimônio líquido da empresa.",
+  "Regularidade Faturamento": "Avalia a estabilidade mensal do faturamento pelo coeficiente de variação.",
+  "Tempo de Mercado": "Pontua empresas com maior histórico operacional.",
+  "PL Positivo/Crescente": "Verifica se o patrimônio líquido é positivo e evolui entre balanços.",
+  "Diversificação de Receitas": "Avalia se a receita depende de poucos clientes/fontes ou é distribuída.",
+};
 
 // ─── Criteria Editor (weights + expandable ranges) ──────
 function CriteriaEditor({
@@ -61,7 +80,19 @@ function CriteriaEditor({
         return (
           <div key={c.id} className="rounded-lg border border-border bg-card">
             <div className="flex items-center gap-3 px-4 py-3">
-              <span className="flex-1 text-sm font-medium text-foreground">{c.name}</span>
+              <span className="flex flex-1 items-center gap-2 text-sm font-medium text-foreground">
+                {c.name}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="h-4 w-4 cursor-help text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      {CRITERION_HELP[c.name] || "Critério calculado a partir dos dados extraídos dos documentos enviados."}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </span>
               <Input
                 type="number" min={0} max={1000}
                 className="w-24 text-center"
@@ -126,7 +157,19 @@ function CriteriaEditor({
           <div key={cc.id} className="rounded-lg border border-dashed border-primary/40 bg-card">
             <div className="flex items-center gap-3 px-4 py-3">
               <Badge variant="outline" className="text-xs">Custom</Badge>
-              <span className="flex-1 text-sm font-medium text-foreground">{cc.name}</span>
+              <span className="flex flex-1 items-center gap-2 text-sm font-medium text-foreground">
+                {cc.name}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="h-4 w-4 cursor-help text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      Critério customizado calculado a partir do campo: {cc.referenceField || "referência não definida"}.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </span>
               <Input
                 type="number" min={0} max={1000} className="w-24 text-center"
                 value={cc.maxPoints}
@@ -225,17 +268,26 @@ function CriteriaEditor({
 
 // ─── Add Custom Criterion Dialog ────────────────
 function AddCustomDialog({
-  open, onOpenChange, onAdd,
-}: { open: boolean; onOpenChange: (v: boolean) => void; onAdd: (c: CustomCriterion) => void }) {
+  open, onOpenChange, onAdd, editCriterion,
+}: { open: boolean; onOpenChange: (v: boolean) => void; onAdd: (c: CustomCriterion) => void; editCriterion?: CustomCriterion | null }) {
   const [name, setName] = useState("");
   const [maxPoints, setMaxPoints] = useState(50);
   const [calcType, setCalcType] = useState<"boolean" | "ranges">("boolean");
   const [applicableTo, setApplicableTo] = useState<("pfIrpf" | "pfComprovantes" | "pj")[]>(["pfIrpf"]);
   const [referenceField, setReferenceField] = useState("");
 
+  useEffect(() => {
+    if (!open) return;
+    setName(editCriterion?.name || "");
+    setMaxPoints(editCriterion?.maxPoints || 50);
+    setCalcType(editCriterion?.calcType || "boolean");
+    setApplicableTo(editCriterion?.applicableTo || ["pfIrpf"]);
+    setReferenceField(editCriterion?.referenceField || "");
+  }, [open, editCriterion]);
+
   const handleAdd = () => {
     if (!name.trim()) return;
-    const id = `custom_${Date.now()}`;
+    const id = editCriterion?.id || `custom_${Date.now()}`;
     const ranges: CustomCriterion["ranges"] = calcType === "boolean"
       ? [{ label: "Não", min: 0, max: 1, percentage: 0 }, { label: "Sim", min: 1, max: 2, percentage: 100 }]
       : [
@@ -243,7 +295,7 @@ function AddCustomDialog({
         { label: "Médio", min: 33, max: 66, percentage: 50 },
         { label: "Alto", min: 66, max: 100, percentage: 100 },
       ];
-    onAdd({ id, name: name.trim(), maxPoints, ranges, calcType, applicableTo, referenceField });
+    onAdd({ id, name: name.trim(), maxPoints, ranges: editCriterion?.ranges || ranges, calcType, applicableTo, referenceField });
     setName(""); setMaxPoints(50); setCalcType("boolean"); setApplicableTo(["pfIrpf"]); setReferenceField("");
     onOpenChange(false);
   };
@@ -256,7 +308,7 @@ function AddCustomDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Adicionar Critério Customizado</DialogTitle>
+          <DialogTitle>{editCriterion ? "Editar Critério Customizado" : "Adicionar Critério Customizado"}</DialogTitle>
           <DialogDescription>Critérios customizados dependem de dados que a IA consiga extrair dos documentos.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -293,7 +345,7 @@ function AddCustomDialog({
             <Input value={referenceField} onChange={(e) => setReferenceField(e.target.value)}
               placeholder="Descreva qual dado da extração usar" />
           </div>
-          <Button onClick={handleAdd} disabled={!name.trim()} className="w-full">Adicionar</Button>
+          <Button onClick={handleAdd} disabled={!name.trim()} className="w-full">{editCriterion ? "Salvar alterações" : "Adicionar"}</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -305,11 +357,22 @@ export default function Configuracoes() {
   const [config, setConfig] = useState<ScoringConfig>(() => loadConfig());
   const [savedConfig, setSavedConfig] = useState<string>(() => JSON.stringify(loadConfig()));
   const [addCustomOpen, setAddCustomOpen] = useState(false);
+  const [editingCustom, setEditingCustom] = useState<CustomCriterion | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const hasChanges = useMemo(() => JSON.stringify(config) !== savedConfig, [config, savedConfig]);
+  const totals = useMemo(() => ({
+    pfIrpf: config.pfIrpf.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pfIrpf")).reduce((s, c) => s + c.maxPoints, 0),
+    pfComprovantes: config.pfComprovantes.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pfComprovantes")).reduce((s, c) => s + c.maxPoints, 0),
+    pj: config.pj.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pj")).reduce((s, c) => s + c.maxPoints, 0),
+  }), [config]);
+  const invalidTotals = Object.values(totals).some((total) => total !== 1000);
 
   const handleSave = () => {
+    if (invalidTotals) {
+      toast.error("A soma dos pesos de todas as abas deve ser exatamente 1000 antes de salvar.");
+      return;
+    }
     saveConfig(config);
     setSavedConfig(JSON.stringify(config));
     toast.success("Configurações salvas com sucesso.");
@@ -323,7 +386,7 @@ export default function Configuracoes() {
     toast.success("Configurações restauradas para os valores padrão.");
   };
 
-  const handleExport = () => exportConfig(config);
+  const handleExport = () => exportConfig({ ...config, descricao: config.descricao || "Preset de pontuação POSSIBLE" });
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -380,6 +443,16 @@ export default function Configuracoes() {
             </TabsContent>
           ))}
         </Tabs>
+
+        {/* SECTION 3: Decision Bands */}
+        <section className="space-y-2">
+          <h2 className="text-base font-semibold text-foreground">Descrição do preset</h2>
+          <Input
+            value={config.descricao || ""}
+            onChange={(e) => setConfig(prev => ({ ...prev, descricao: e.target.value }))}
+            placeholder="Ex: Política conservadora POSSIBLE — abril/2026"
+          />
+        </section>
 
         {/* SECTION 3: Decision Bands */}
         <section className="space-y-3">
@@ -486,7 +559,11 @@ export default function Configuracoes() {
                     {cc.calcType === "boolean" ? "Sim/Não" : "Faixas"} · {cc.maxPoints} pts ·
                     {cc.applicableTo.map(a => a === "pfIrpf" ? " PF IRPF" : a === "pfComprovantes" ? " PF Comp." : " PJ").join(",")}
                   </span>
-                  <Button variant="ghost" size="sm" className="text-destructive"
+                  <Button variant="ghost" size="sm" title="Editar"
+                    onClick={() => { setEditingCustom(cc); setAddCustomOpen(true); }}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" title="Excluir" className="text-destructive"
                     onClick={() => setConfig(prev => ({ ...prev, customCriteria: prev.customCriteria.filter(c => c.id !== cc.id) }))}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -530,15 +607,20 @@ export default function Configuracoes() {
             </Button>
             <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
           </div>
-          <Button onClick={handleSave} className="gap-2">
+          <Button onClick={handleSave} className="gap-2" disabled={invalidTotals} title={invalidTotals ? "A soma dos pesos deve ser 1000 em todas as abas" : undefined}>
             <Save className="h-4 w-4" /> Salvar Configurações
             {hasChanges && <span className="ml-1 h-2 w-2 rounded-full bg-destructive-foreground animate-pulse" />}
           </Button>
         </div>
       </div>
 
-      <AddCustomDialog open={addCustomOpen} onOpenChange={setAddCustomOpen}
-        onAdd={(c) => setConfig(prev => ({ ...prev, customCriteria: [...prev.customCriteria, c] }))} />
+      <AddCustomDialog open={addCustomOpen} onOpenChange={(open) => { setAddCustomOpen(open); if (!open) setEditingCustom(null); }} editCriterion={editingCustom}
+        onAdd={(c) => setConfig(prev => ({
+          ...prev,
+          customCriteria: prev.customCriteria.some(existing => existing.id === c.id)
+            ? prev.customCriteria.map(existing => existing.id === c.id ? c : existing)
+            : [...prev.customCriteria, c],
+        }))} />
     </div>
   );
 }
