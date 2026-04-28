@@ -499,28 +499,6 @@ export default function Configuracoes() {
           </p>
         </section>
 
-        {/* SECTION 6: Security */}
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <Shield className="h-4 w-4" /> Segurança
-          </h2>
-          <div className="rounded-lg border border-border bg-card p-4 space-y-3 max-w-md">
-            <div>
-              <label className="text-xs text-muted-foreground">Senha atual</label>
-              <Input type="password" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Nova senha</label>
-              <Input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Confirmar nova senha</label>
-              <Input type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} />
-            </div>
-            {pwdError && <p className="text-xs text-destructive">{pwdError}</p>}
-            <Button onClick={handleChangePwd} size="sm">Alterar Senha</Button>
-          </div>
-        </section>
       </div>
 
       {/* Sticky footer */}
