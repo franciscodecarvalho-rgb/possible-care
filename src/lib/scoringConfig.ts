@@ -35,6 +35,7 @@ export interface FinancialParams {
 }
 
 export interface ScoringConfig {
+  descricao?: string;
   pfIrpf: CriterionConfig[];
   pfComprovantes: CriterionConfig[];
   pj: CriterionConfig[];
@@ -246,6 +247,14 @@ export const DEFAULT_CONFIG: ScoringConfig = {
         { label: "Positivo e crescente", min: 2, max: 3, percentage: 100 },
       ],
     },
+    {
+      id: "pj_diversificacao_receitas", name: "Diversificação de Receitas", maxPoints: 50,
+      ranges: [
+        { label: "Concentrada", min: 0, max: 2, percentage: 20 },
+        { label: "Moderada", min: 2, max: 4, percentage: 60 },
+        { label: "Diversificada", min: 4, max: 100, percentage: 100 },
+      ],
+    },
   ],
   decisionBands: [
     { label: "CRÉDITO APROVADO", min: 750, max: 1000, color: "#16a34a" },
@@ -262,13 +271,31 @@ export const DEFAULT_CONFIG: ScoringConfig = {
   customCriteria: [],
 };
 
+const mergeCriteria = (defaults: CriterionConfig[], saved?: CriterionConfig[]) => {
+  if (!Array.isArray(saved)) return structuredClone(defaults);
+  const savedById = new Map(saved.map((c) => [c.id, c]));
+  const merged = defaults.map((def) => ({ ...def, ...(savedById.get(def.id) || {}) }));
+  const customSaved = saved.filter((c) => !defaults.some((def) => def.id === c.id));
+  return [...merged, ...customSaved];
+};
+
+const normalizeConfig = (parsed: Partial<ScoringConfig>): ScoringConfig => ({
+  ...DEFAULT_CONFIG,
+  ...parsed,
+  pfIrpf: mergeCriteria(DEFAULT_CONFIG.pfIrpf, parsed.pfIrpf),
+  pfComprovantes: mergeCriteria(DEFAULT_CONFIG.pfComprovantes, parsed.pfComprovantes),
+  pj: mergeCriteria(DEFAULT_CONFIG.pj, parsed.pj),
+  decisionBands: parsed.decisionBands || structuredClone(DEFAULT_CONFIG.decisionBands),
+  financialParams: { ...DEFAULT_CONFIG.financialParams, ...(parsed.financialParams || {}) },
+  customCriteria: parsed.customCriteria || [],
+});
+
 export function loadConfig(): ScoringConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Merge with defaults to ensure new fields are present
-      return { ...DEFAULT_CONFIG, ...parsed };
+      return normalizeConfig(parsed);
     }
   } catch { /* ignore */ }
   return structuredClone(DEFAULT_CONFIG);
@@ -283,11 +310,12 @@ export function resetConfig(): void {
 }
 
 export function exportConfig(config: ScoringConfig): void {
-  const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+  const payload = { descricao: config.descricao || "Preset de pontuação POSSIBLE", ...config };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `config_scoring_${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `config-possible-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -299,7 +327,7 @@ export function importConfig(file: File): Promise<ScoringConfig> {
       try {
         const parsed = JSON.parse(reader.result as string);
         if (parsed.pfIrpf && parsed.pj && parsed.decisionBands) {
-          resolve({ ...DEFAULT_CONFIG, ...parsed });
+          resolve(normalizeConfig(parsed));
         } else {
           reject(new Error("Formato de configuração inválido"));
         }
