@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import Header from "@/components/Header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,62 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
-  Lock, LockOpen, ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle, Shield,
+  ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle,
 } from "lucide-react";
 import {
   ScoringConfig, CriterionConfig, CustomCriterion, DecisionBand,
   DEFAULT_CONFIG, loadConfig, saveConfig, resetConfig, exportConfig, importConfig,
-  getAdminPassword, setAdminPassword, isConfigAuthenticated, setConfigAuthenticated,
   validateRanges, validateDecisionBands,
 } from "@/lib/scoringConfig";
 import BackButton from "@/components/BackButton";
-
-// ─── Password Modal ─────────────────────────────
-function PasswordModal({ onSuccess }: { onSuccess: () => void }) {
-  const [pwd, setPwd] = useState("");
-  const [error, setError] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pwd === getAdminPassword()) {
-      setConfigAuthenticated(true);
-      onSuccess();
-    } else {
-      setError(true);
-      setPwd("");
-      inputRef.current?.focus();
-    }
-  };
-
-  return (
-    <Dialog open={true}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" /> Acesso Restrito
-          </DialogTitle>
-          <DialogDescription>
-            Área de configuração do motor de pontuação. Insira a senha de administrador.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            ref={inputRef}
-            type="password"
-            placeholder="Senha de administrador"
-            value={pwd}
-            onChange={(e) => { setPwd(e.target.value); setError(false); }}
-          />
-          {error && <p className="text-sm font-medium text-destructive">Senha incorreta</p>}
-          <Button type="submit" className="w-full">Acessar</Button>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ─── Criteria Editor (weights + expandable ranges) ──────
 function CriteriaEditor({
@@ -350,7 +302,6 @@ function AddCustomDialog({
 
 // ─── Main Page ─────────────────────────────────
 export default function Configuracoes() {
-  const [authenticated, setAuthenticated] = useState(isConfigAuthenticated());
   const [config, setConfig] = useState<ScoringConfig>(() => loadConfig());
   const [savedConfig, setSavedConfig] = useState<string>(() => JSON.stringify(loadConfig()));
   const [addCustomOpen, setAddCustomOpen] = useState(false);
@@ -387,37 +338,7 @@ export default function Configuracoes() {
     e.target.value = "";
   };
 
-  const handleLock = () => {
-    setConfigAuthenticated(false);
-    setAuthenticated(false);
-  };
-
-  // Password change
-  const [currentPwd, setCurrentPwd] = useState("");
-  const [newPwd, setNewPwd] = useState("");
-  const [confirmPwd, setConfirmPwd] = useState("");
-  const [pwdError, setPwdError] = useState("");
-
-  const handleChangePwd = () => {
-    setPwdError("");
-    if (currentPwd !== getAdminPassword()) { setPwdError("Senha atual incorreta."); return; }
-    if (newPwd.length < 4) { setPwdError("A nova senha deve ter pelo menos 4 caracteres."); return; }
-    if (newPwd !== confirmPwd) { setPwdError("A confirmação não confere."); return; }
-    setAdminPassword(newPwd);
-    setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
-    toast.success("Senha alterada com sucesso.");
-  };
-
   const bandsError = useMemo(() => validateDecisionBands(config.decisionBands), [config.decisionBands]);
-
-  if (!authenticated) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <PasswordModal onSuccess={() => setAuthenticated(true)} />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -434,9 +355,6 @@ export default function Configuracoes() {
             {hasChanges && (
               <Badge variant="destructive" className="text-xs">Alterações não salvas</Badge>
             )}
-            <Button variant="outline" size="sm" onClick={handleLock}>
-              <LockOpen className="mr-1 h-4 w-4" /> Bloquear
-            </Button>
           </div>
         </div>
       </div>
@@ -581,28 +499,6 @@ export default function Configuracoes() {
           </p>
         </section>
 
-        {/* SECTION 6: Security */}
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <Shield className="h-4 w-4" /> Segurança
-          </h2>
-          <div className="rounded-lg border border-border bg-card p-4 space-y-3 max-w-md">
-            <div>
-              <label className="text-xs text-muted-foreground">Senha atual</label>
-              <Input type="password" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Nova senha</label>
-              <Input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Confirmar nova senha</label>
-              <Input type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} />
-            </div>
-            {pwdError && <p className="text-xs text-destructive">{pwdError}</p>}
-            <Button onClick={handleChangePwd} size="sm">Alterar Senha</Button>
-          </div>
-        </section>
       </div>
 
       {/* Sticky footer */}
