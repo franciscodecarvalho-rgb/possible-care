@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
@@ -302,7 +302,6 @@ function AddCustomDialog({
 
 // ─── Main Page ─────────────────────────────────
 export default function Configuracoes() {
-  const [authenticated, setAuthenticated] = useState(isConfigAuthenticated());
   const [config, setConfig] = useState<ScoringConfig>(() => loadConfig());
   const [savedConfig, setSavedConfig] = useState<string>(() => JSON.stringify(loadConfig()));
   const [addCustomOpen, setAddCustomOpen] = useState(false);
@@ -339,37 +338,7 @@ export default function Configuracoes() {
     e.target.value = "";
   };
 
-  const handleLock = () => {
-    setConfigAuthenticated(false);
-    setAuthenticated(false);
-  };
-
-  // Password change
-  const [currentPwd, setCurrentPwd] = useState("");
-  const [newPwd, setNewPwd] = useState("");
-  const [confirmPwd, setConfirmPwd] = useState("");
-  const [pwdError, setPwdError] = useState("");
-
-  const handleChangePwd = () => {
-    setPwdError("");
-    if (currentPwd !== getAdminPassword()) { setPwdError("Senha atual incorreta."); return; }
-    if (newPwd.length < 4) { setPwdError("A nova senha deve ter pelo menos 4 caracteres."); return; }
-    if (newPwd !== confirmPwd) { setPwdError("A confirmação não confere."); return; }
-    setAdminPassword(newPwd);
-    setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
-    toast.success("Senha alterada com sucesso.");
-  };
-
   const bandsError = useMemo(() => validateDecisionBands(config.decisionBands), [config.decisionBands]);
-
-  if (!authenticated) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <PasswordModal onSuccess={() => setAuthenticated(true)} />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -386,9 +355,6 @@ export default function Configuracoes() {
             {hasChanges && (
               <Badge variant="destructive" className="text-xs">Alterações não salvas</Badge>
             )}
-            <Button variant="outline" size="sm" onClick={handleLock}>
-              <LockOpen className="mr-1 h-4 w-4" /> Bloquear
-            </Button>
           </div>
         </div>
       </div>
