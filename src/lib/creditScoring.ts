@@ -179,10 +179,9 @@ export function scorePF(
   const score = breakdown.reduce((s, b) => s + b.points, 0);
   const { decision, decisionColor } = makeDecision(score, insufficientData, config);
 
-  const analysisKey = buildAnalysisKey("pf", extractedData, { valor, prazo, finalidade }, config);
   const result: ScoringResult = {
     score, breakdown, decision, decisionColor, insufficientData,
-    protocolo: generateProtocolo(analysisKey), analysisKey, data: new Date().toISOString(), tipo: "pf",
+    protocolo: generateProtocolo(), data: new Date().toISOString(), tipo: "pf",
     extractedData, formData: { valor, prazo, finalidade },
   };
   saveResult(result);
@@ -380,10 +379,9 @@ export function scorePJ(
   const score = breakdown.reduce((s, b) => s + b.points, 0);
   const { decision, decisionColor } = makeDecision(score, insufficientData, config);
 
-  const analysisKey = buildAnalysisKey("pj", extractedData, { valor, prazo, finalidade }, config);
   const result: ScoringResult = {
     score, breakdown, decision, decisionColor, insufficientData,
-    protocolo: generateProtocolo(analysisKey), analysisKey, data: new Date().toISOString(), tipo: "pj",
+    protocolo: generateProtocolo(), data: new Date().toISOString(), tipo: "pj",
     pjDocType,
     extractedData, formData: { valor, prazo, finalidade },
   };
