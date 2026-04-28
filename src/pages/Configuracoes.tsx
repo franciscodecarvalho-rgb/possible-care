@@ -357,11 +357,22 @@ export default function Configuracoes() {
   const [config, setConfig] = useState<ScoringConfig>(() => loadConfig());
   const [savedConfig, setSavedConfig] = useState<string>(() => JSON.stringify(loadConfig()));
   const [addCustomOpen, setAddCustomOpen] = useState(false);
+  const [editingCustom, setEditingCustom] = useState<CustomCriterion | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const hasChanges = useMemo(() => JSON.stringify(config) !== savedConfig, [config, savedConfig]);
+  const totals = useMemo(() => ({
+    pfIrpf: config.pfIrpf.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pfIrpf")).reduce((s, c) => s + c.maxPoints, 0),
+    pfComprovantes: config.pfComprovantes.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pfComprovantes")).reduce((s, c) => s + c.maxPoints, 0),
+    pj: config.pj.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pj")).reduce((s, c) => s + c.maxPoints, 0),
+  }), [config]);
+  const invalidTotals = Object.values(totals).some((total) => total !== 1000);
 
   const handleSave = () => {
+    if (invalidTotals) {
+      toast.error("A soma dos pesos de todas as abas deve ser exatamente 1000 antes de salvar.");
+      return;
+    }
     saveConfig(config);
     setSavedConfig(JSON.stringify(config));
     toast.success("Configurações salvas com sucesso.");
@@ -375,7 +386,7 @@ export default function Configuracoes() {
     toast.success("Configurações restauradas para os valores padrão.");
   };
 
-  const handleExport = () => exportConfig(config);
+  const handleExport = () => exportConfig({ ...config, descricao: config.descricao || "Preset de pontuação POSSIBLE" });
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
