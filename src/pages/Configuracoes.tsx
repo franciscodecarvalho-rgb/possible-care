@@ -445,6 +445,16 @@ export default function Configuracoes() {
         </Tabs>
 
         {/* SECTION 3: Decision Bands */}
+        <section className="space-y-2">
+          <h2 className="text-base font-semibold text-foreground">Descrição do preset</h2>
+          <Input
+            value={config.descricao || ""}
+            onChange={(e) => setConfig(prev => ({ ...prev, descricao: e.target.value }))}
+            placeholder="Ex: Política conservadora POSSIBLE — abril/2026"
+          />
+        </section>
+
+        {/* SECTION 3: Decision Bands */}
         <section className="space-y-3">
           <h2 className="text-base font-semibold text-foreground">Faixas de Decisão</h2>
           <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -549,7 +559,11 @@ export default function Configuracoes() {
                     {cc.calcType === "boolean" ? "Sim/Não" : "Faixas"} · {cc.maxPoints} pts ·
                     {cc.applicableTo.map(a => a === "pfIrpf" ? " PF IRPF" : a === "pfComprovantes" ? " PF Comp." : " PJ").join(",")}
                   </span>
-                  <Button variant="ghost" size="sm" className="text-destructive"
+                  <Button variant="ghost" size="sm" title="Editar"
+                    onClick={() => { setEditingCustom(cc); setAddCustomOpen(true); }}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" title="Excluir" className="text-destructive"
                     onClick={() => setConfig(prev => ({ ...prev, customCriteria: prev.customCriteria.filter(c => c.id !== cc.id) }))}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -593,15 +607,20 @@ export default function Configuracoes() {
             </Button>
             <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
           </div>
-          <Button onClick={handleSave} className="gap-2">
+          <Button onClick={handleSave} className="gap-2" disabled={invalidTotals} title={invalidTotals ? "A soma dos pesos deve ser 1000 em todas as abas" : undefined}>
             <Save className="h-4 w-4" /> Salvar Configurações
             {hasChanges && <span className="ml-1 h-2 w-2 rounded-full bg-destructive-foreground animate-pulse" />}
           </Button>
         </div>
       </div>
 
-      <AddCustomDialog open={addCustomOpen} onOpenChange={setAddCustomOpen}
-        onAdd={(c) => setConfig(prev => ({ ...prev, customCriteria: [...prev.customCriteria, c] }))} />
+      <AddCustomDialog open={addCustomOpen} onOpenChange={(open) => { setAddCustomOpen(open); if (!open) setEditingCustom(null); }} editCriterion={editingCustom}
+        onAdd={(c) => setConfig(prev => ({
+          ...prev,
+          customCriteria: prev.customCriteria.some(existing => existing.id === c.id)
+            ? prev.customCriteria.map(existing => existing.id === c.id ? c : existing)
+            : [...prev.customCriteria, c],
+        }))} />
     </div>
   );
 }
