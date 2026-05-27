@@ -1,8 +1,26 @@
-import { Link, useLocation } from "react-router-dom";
-import { FileText, History, Settings } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { FileText, History, Settings, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    supabase.auth.getSession().then(({ data: { session: initial } }) => setSession(initial));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
 
   return (
     <header className="border-b bg-navy">
@@ -49,6 +67,21 @@ const Header = () => {
             <Settings className="h-4 w-4" />
             Configurações
           </Link>
+          {session?.user?.email && (
+            <div className="ml-3 flex items-center gap-2 border-l border-navy-foreground/20 pl-3">
+              <span className="hidden text-xs text-navy-foreground/70 sm:inline">
+                {session.user.email}
+              </span>
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-navy-foreground/70 transition-colors hover:bg-navy-light/50 hover:text-navy-foreground"
+                title="Sair"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sair</span>
+              </button>
+            </div>
+          )}
         </nav>
       </div>
     </header>
