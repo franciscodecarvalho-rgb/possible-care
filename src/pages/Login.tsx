@@ -3,23 +3,68 @@ import { useNavigate } from "react-router-dom";
 import { FileText, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-const APP_PASSWORD = "Possible";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const Login = () => {
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === APP_PASSWORD) {
-      sessionStorage.setItem("app_authenticated", "true");
-      setError(false);
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (signInError) {
+        if (
+          signInError.message.toLowerCase().includes("invalid") ||
+          signInError.message.toLowerCase().includes("credentials")
+        ) {
+          setError("Email ou senha incorretos");
+        } else {
+          setError("Não foi possível entrar. Tente novamente.");
+          toast.error(signInError.message);
+        }
+        setPassword("");
+        return;
+      }
       navigate("/");
-    } else {
-      setError(true);
-      setPassword("");
+    } catch (err) {
+      setError("Erro inesperado. Tente novamente.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError(null);
+    setInfo(null);
+    if (!email.trim()) {
+      setError("Informe seu email para receber o link de redefinição");
+      return;
+    }
+    setResetting(true);
+    try {
+      await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      setInfo("Se o email existir, você receberá instruções para redefinir a senha.");
+    } catch (err) {
+      console.error(err);
+      setInfo("Se o email existir, você receberá instruções para redefinir a senha.");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -36,17 +81,40 @@ const Login = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            type="password"
-            placeholder="Digite a senha de acesso"
-            value={password}
-            onChange={(e) => { setPassword(e.target.value); setError(false); }}
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(null); setInfo(null); }}
+            required
             autoFocus
+            autoComplete="email"
           />
-          {error && <p className="text-sm font-medium text-destructive">Senha incorreta</p>}
-          <Button type="submit" className="w-full bg-navy text-navy-foreground hover:bg-navy-light">
+          <Input
+            type="password"
+            placeholder="Senha"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(null); }}
+            required
+            autoComplete="current-password"
+          />
+          {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+          {info && <p className="text-sm font-medium text-foreground">{info}</p>}
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-navy text-navy-foreground hover:bg-navy-light"
+          >
             <LogIn className="mr-2 h-4 w-4" />
-            Entrar
+            {loading ? "Entrando..." : "Entrar"}
           </Button>
+          <button
+            type="button"
+            onClick={handleForgotPassword}
+            disabled={resetting}
+            className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
+          >
+            {resetting ? "Enviando..." : "Esqueci minha senha"}
+          </button>
         </form>
       </div>
     </div>
