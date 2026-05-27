@@ -14,7 +14,111 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      analises: {
+        Row: {
+          breakdown: Json
+          created_at: string
+          created_by: string | null
+          data: string
+          decision: string
+          decision_color: string
+          extracted_data: Json
+          form_data: Json
+          id: string
+          insufficient_data: boolean
+          manual_adjustment: Json | null
+          pj_doc_type: string | null
+          protocolo: string
+          score: number
+          score_original: number | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          breakdown: Json
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          decision: string
+          decision_color: string
+          extracted_data: Json
+          form_data: Json
+          id?: string
+          insufficient_data?: boolean
+          manual_adjustment?: Json | null
+          pj_doc_type?: string | null
+          protocolo: string
+          score: number
+          score_original?: number | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          breakdown?: Json
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          decision?: string
+          decision_color?: string
+          extracted_data?: Json
+          form_data?: Json
+          id?: string
+          insufficient_data?: boolean
+          manual_adjustment?: Json | null
+          pj_doc_type?: string | null
+          protocolo?: string
+          score?: number
+          score_original?: number | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_admin: boolean
+          nome: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          is_admin?: boolean
+          nome?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_admin?: boolean
+          nome?: string | null
+        }
+        Relationships: []
+      }
+      scoring_config: {
+        Row: {
+          config: Json
+          id: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          config: Json
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          config?: Json
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
