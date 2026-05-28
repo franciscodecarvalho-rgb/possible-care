@@ -46,12 +46,18 @@ const Resultado = () => {
       return;
     }
     if (!extractedData || !formData) return;
+    let r: ScoringResult | null = null;
     if (tipo === "pf") {
-      const r = scorePF(extractedData, formData.valor, formData.prazo, formData.finalidade);
-      setResult(r);
+      r = scorePF(extractedData, formData.valor, formData.prazo, formData.finalidade);
     } else if (tipo === "pj") {
-      const r = scorePJ(extractedData, formData.valor, formData.prazo, formData.finalidade);
+      r = scorePJ(extractedData, formData.valor, formData.prazo, formData.finalidade);
+    }
+    if (r) {
       setResult(r);
+      saveHistoryResult(r).catch((e) => {
+        console.error(e);
+        toast.error("Falha ao salvar análise no histórico.");
+      });
     }
   }, []);
 
@@ -89,7 +95,7 @@ const Resultado = () => {
     }
   };
 
-  const handleManualAdjust = () => {
+  const handleManualAdjust = async () => {
     if (!result || !adjustJustification.trim()) {
       toast.error("Informe a justificativa do ajuste manual.");
       return;
@@ -102,10 +108,14 @@ const Resultado = () => {
       score,
       manualAdjustment: { points: adjustPoints, justification: adjustJustification.trim(), adjustedAt: new Date().toISOString() },
     };
-    setResult(next);
-    persistHistory(loadHistory().map((item) => item.protocolo === next.protocolo ? next : item));
-    setAdjustOpen(false);
-    toast.success("Ajuste manual registrado no relatório.");
+    try {
+      await updateHistoryResult(next);
+      setResult(next);
+      setAdjustOpen(false);
+      toast.success("Ajuste manual registrado no relatório.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao salvar ajuste manual.");
+    }
   };
 
   if (!extractedData && !location.state?.fromHistory) {
