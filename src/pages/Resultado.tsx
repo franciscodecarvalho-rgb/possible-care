@@ -10,7 +10,7 @@ import BackButton from "@/components/BackButton";
 import { useEffect, useRef, useState } from "react";
 import { scorePF, scorePJ, type ScoringResult } from "@/lib/creditScoring";
 import { generateAnalysis } from "@/lib/reportAnalysis";
-import { loadHistory, persistHistory } from "@/lib/historyStorage";
+import { saveHistoryResult, updateHistoryResult } from "@/lib/historyService";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toast } from "sonner";

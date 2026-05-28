@@ -126,6 +126,8 @@ const Historico = () => {
           Consulte as análises de crédito realizadas
         </p>
 
+        <MigracaoLocalStorage onMigrated={reload} />
+
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
             ["Total", metrics.total],
