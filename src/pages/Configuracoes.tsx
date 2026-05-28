@@ -655,9 +655,10 @@ export default function Configuracoes() {
             </Button>
             <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
           </div>
-          <Button onClick={handleSave} className="gap-2" disabled={invalidTotals} title={invalidTotals ? "A soma dos pesos deve ser 1000 em todas as abas" : undefined}>
-            <Save className="h-4 w-4" /> Salvar Configurações
-            {hasChanges && <span className="ml-1 h-2 w-2 rounded-full bg-destructive-foreground animate-pulse" />}
+          <Button onClick={handleSave} className="gap-2" disabled={invalidTotals || saving} title={invalidTotals ? "A soma dos pesos deve ser 1000 em todas as abas" : undefined}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "Salvando..." : "Salvar Configurações"}
+            {hasChanges && !saving && <span className="ml-1 h-2 w-2 rounded-full bg-destructive-foreground animate-pulse" />}
           </Button>
         </div>
       </div>
