@@ -12,6 +12,9 @@ import Preview from "./pages/Preview";
 import Resultado from "./pages/Resultado";
 import Historico from "./pages/Historico";
 import Configuracoes from "./pages/Configuracoes";
+import Clientes from "./pages/Clientes";
+import ClienteFormulario from "./pages/ClienteFormulario";
+import ClienteFicha from "./pages/ClienteFicha";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
