@@ -287,6 +287,33 @@ export type Database = {
           },
         ]
       }
+      politicas_credito: {
+        Row: {
+          ativa: boolean
+          conteudo: string
+          criada_em: string
+          criada_por: string | null
+          id: string
+          versao: number
+        }
+        Insert: {
+          ativa?: boolean
+          conteudo: string
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          versao: number
+        }
+        Update: {
+          ativa?: boolean
+          conteudo?: string
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          versao?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -310,6 +337,44 @@ export type Database = {
           nome?: string | null
         }
         Relationships: []
+      }
+      sugestoes_config: {
+        Row: {
+          criada_em: string
+          id: string
+          politica_id: string | null
+          resolvida_em: string | null
+          resolvida_por: string | null
+          status: string
+          sugestoes: Json
+        }
+        Insert: {
+          criada_em?: string
+          id?: string
+          politica_id?: string | null
+          resolvida_em?: string | null
+          resolvida_por?: string | null
+          status?: string
+          sugestoes: Json
+        }
+        Update: {
+          criada_em?: string
+          id?: string
+          politica_id?: string | null
+          resolvida_em?: string | null
+          resolvida_por?: string | null
+          status?: string
+          sugestoes?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sugestoes_config_politica_id_fkey"
+            columns: ["politica_id"]
+            isOneToOne: false
+            referencedRelation: "politicas_credito"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scoring_config: {
         Row: {

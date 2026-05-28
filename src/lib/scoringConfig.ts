@@ -207,8 +207,7 @@ export const DEFAULT_CONFIG: ScoringConfig = {
   decisionBands: [
     { label: "CRÉDITO APROVADO", min: 750, max: 1000, color: "#16a34a" },
     { label: "APROVADO COM RESSALVAS", min: 500, max: 749, color: "#ea580c" },
-    { label: "CRÉDITO REPROVADO", min: 300, max: 499, color: "#dc2626" },
-    { label: "CRÉDITO REPROVADO — RISCO ELEVADO", min: 0, max: 299, color: "#991b1b" },
+    { label: "CRÉDITO REPROVADO", min: 0, max: 499, color: "#dc2626" },
   ],
   financialParams: {
     taxaMensal: 2.0,
