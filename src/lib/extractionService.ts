@@ -73,3 +73,50 @@ export async function extractFromFiles(
     throw new Error(`Erro ao interpretar dados extraídos: ${err?.message || String(err)}`);
   }
 }
+
+export async function extractBureauFromFile(
+  file: File,
+  onProgress?: ProgressCallback,
+): Promise<any> {
+  onProgress?.("Convertendo PDF do bureau em imagens...");
+  let allImages: string[];
+  try {
+    allImages = await pdfToBase64Images(file);
+  } catch (err: any) {
+    console.error("Erro ao converter PDF de bureau:", err);
+    throw new Error(`Erro ao converter PDF: ${err?.message || String(err)}`);
+  }
+
+  onProgress?.("Extraindo dados do bureau via IA...");
+  let data: any;
+  try {
+    const result = await supabase.functions.invoke("extract-bureau", {
+      body: { images: allImages },
+    });
+    if (result.error) {
+      throw new Error(result.error.message || JSON.stringify(result.error));
+    }
+    data = result.data;
+  } catch (err: any) {
+    console.error("Erro na chamada à API extract-bureau:", err);
+    throw new Error(`Erro na API: ${err?.message || String(err)}`);
+  }
+
+  if (data?.error) {
+    console.error("Erro retornado pela extract-bureau:", data.error);
+    throw new Error(`Erro na API: ${data.error}`);
+  }
+
+  const extracted = data?.extracted;
+  if (!extracted) {
+    throw new Error("Resposta da extract-bureau sem campo 'extracted'.");
+  }
+  if (extracted.raw_text) {
+    console.warn("IA retornou texto bruto:", extracted.raw_text);
+    throw new Error(
+      `IA não retornou JSON válido. Resposta: ${String(extracted.raw_text).substring(0, 200)}...`,
+    );
+  }
+  onProgress?.("Extração do bureau concluída.");
+  return extracted;
+}

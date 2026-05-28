@@ -1,17 +1,41 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Download, SlidersHorizontal, AlertTriangle, UserPlus } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  FileText,
+  Download,
+  SlidersHorizontal,
+  AlertTriangle,
+  UserPlus,
+  ShieldAlert,
+  Loader2,
+} from "lucide-react";
 import BackButton from "@/components/BackButton";
+import FileDropzone from "@/components/FileDropzone";
 import { useEffect, useRef, useState } from "react";
 import { scorePF, scorePJ, type ScoringResult } from "@/lib/creditScoring";
 import { generateAnalysis } from "@/lib/reportAnalysis";
 import { saveHistoryResult, updateHistoryResult } from "@/lib/historyService";
 import { listarFiadores, type Fiador } from "@/lib/fiadorService";
+import {
+  obterBureauDaAnalise,
+  salvarBureau,
+  type Bureau,
+  type BureauTipo,
+} from "@/lib/bureauService";
+import { extractBureauFromFile } from "@/lib/extractionService";
 import { loadConfig } from "@/lib/scoringConfig";
 import { maskDocumento } from "@/lib/clienteService";
 import html2canvas from "html2canvas";
@@ -20,6 +44,12 @@ import { toast } from "sonner";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const fmtMoney = (v: number | null | undefined) =>
+  typeof v === "number" ? fmt(v) : "—";
+
+const fmtNumber = (v: number | null | undefined) =>
+  typeof v === "number" ? v.toLocaleString("pt-BR") : "—";
 
 const fmtDate = (iso: string) => {
   const d = new Date(iso);
@@ -40,6 +70,13 @@ const Resultado = () => {
   const [adjustJustification, setAdjustJustification] = useState("");
   const [fiadores, setFiadores] = useState<Fiador[]>([]);
   const [carregandoFiadores, setCarregandoFiadores] = useState(false);
+  const [bureau, setBureau] = useState<Bureau | null>(null);
+  const [carregandoBureau, setCarregandoBureau] = useState(false);
+  const [bureauModalOpen, setBureauModalOpen] = useState(false);
+  const [bureauTipo, setBureauTipo] = useState<BureauTipo>("serasa");
+  const [bureauFile, setBureauFile] = useState<File[]>([]);
+  const [bureauUploading, setBureauUploading] = useState(false);
+  const [bureauProgress, setBureauProgress] = useState("");
 
   const extractedData = location.state?.extractedData as Record<string, any> | undefined;
   const tipo = (location.state?.tipo as string) || "pf";
@@ -73,14 +110,20 @@ const Resultado = () => {
   useEffect(() => {
     if (!result?.id) {
       setFiadores([]);
+      setBureau(null);
       return;
     }
     let alive = true;
     setCarregandoFiadores(true);
+    setCarregandoBureau(true);
     listarFiadores(result.id)
       .then((data) => alive && setFiadores(data))
       .catch((e) => alive && toast.error(e?.message || "Erro ao carregar fiadores."))
       .finally(() => alive && setCarregandoFiadores(false));
+    obterBureauDaAnalise(result.id)
+      .then((data) => alive && setBureau(data))
+      .catch((e) => alive && toast.error(e?.message || "Erro ao carregar bureau."))
+      .finally(() => alive && setCarregandoBureau(false));
     return () => {
       alive = false;
     };
@@ -131,7 +174,11 @@ const Resultado = () => {
       ...result,
       originalScore,
       score,
-      manualAdjustment: { points: adjustPoints, justification: adjustJustification.trim(), adjustedAt: new Date().toISOString() },
+      manualAdjustment: {
+        points: adjustPoints,
+        justification: adjustJustification.trim(),
+        adjustedAt: new Date().toISOString(),
+      },
     };
     try {
       await updateHistoryResult(next);
@@ -140,6 +187,33 @@ const Resultado = () => {
       toast.success("Ajuste manual registrado no relatório.");
     } catch (e: any) {
       toast.error(e?.message ?? "Falha ao salvar ajuste manual.");
+    }
+  };
+
+  const handleUploadBureau = async () => {
+    if (!result?.id) {
+      toast.error("Análise sem id persistido — refaça a análise.");
+      return;
+    }
+    if (bureauFile.length === 0) {
+      toast.error("Selecione o PDF do bureau.");
+      return;
+    }
+    setBureauUploading(true);
+    try {
+      const file = bureauFile[0];
+      const extracted = await extractBureauFromFile(file, setBureauProgress);
+      const saved = await salvarBureau(result.id, bureauTipo, extracted, file.name);
+      setBureau(saved);
+      setBureauModalOpen(false);
+      setBureauFile([]);
+      toast.success("Bureau anexado com sucesso.");
+    } catch (err: any) {
+      console.error("Upload bureau erro:", err);
+      toast.error(err?.message || "Erro ao processar relatório do bureau.");
+    } finally {
+      setBureauUploading(false);
+      setBureauProgress("");
     }
   };
 
@@ -171,7 +245,7 @@ const Resultado = () => {
   return (
     <div className="min-h-screen bg-muted">
       <Header />
-      <main className="container mx-auto max-w-6xl px-4 py-8">
+      <main className="container mx-auto max-w-7xl px-4 py-8">
         {/* Action bar */}
         <div className="mb-6 flex items-center justify-between">
           <BackButton to={location.state?.fromHistory ? "/historico" : "/preview"} />
@@ -194,7 +268,6 @@ const Resultado = () => {
           </div>
         </div>
 
-        {/* Banner de corte de fiador */}
         {exigeFiador && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3">
             <div className="flex items-start gap-2">
@@ -215,10 +288,10 @@ const Resultado = () => {
           </div>
         )}
 
-        {/* Layout 2 colunas: Titular | Fiadores */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Coluna do titular (A4 sheet) — 2 colunas */}
-          <div className="lg:col-span-2">
+        {/* Layout 3 colunas em desktop: Titular | Fiador | Bureau */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4">
+          {/* Titular ocupa 2 colunas (mantém A4) */}
+          <div className="lg:col-span-2 xl:col-span-2">
             <div
               ref={reportRef}
               className="mx-auto bg-white shadow-xl"
@@ -233,7 +306,6 @@ const Resultado = () => {
                 lineHeight: "1.5",
               }}
             >
-              {/* HEADER */}
               <div style={{ textAlign: "center", borderBottom: "2px solid #1e3a5f", paddingBottom: "10px", marginBottom: "16px" }}>
                 <h1 style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#1e3a5f" }}>
                   RELATÓRIO DE ANÁLISE DE CRÉDITO
@@ -243,7 +315,6 @@ const Resultado = () => {
                 </p>
               </div>
 
-              {/* BLOCO 1 — SCORE */}
               <div style={{ textAlign: "center", padding: "16px 0", marginBottom: "16px" }}>
                 <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", color: "#6b7280", margin: 0 }}>
                   Score de Crédito
@@ -270,7 +341,6 @@ const Resultado = () => {
                 </div>
               </div>
 
-              {/* BLOCO 2 — IDENTIFICAÇÃO */}
               <div style={{ display: "flex", gap: "24px", marginBottom: "16px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Identificação</p>
@@ -293,7 +363,6 @@ const Resultado = () => {
                 </div>
               </div>
 
-              {/* BLOCO 3 — RESUMO ANALÍTICO */}
               <div style={{ marginBottom: "16px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
                 <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "8px" }}>Resumo Analítico</p>
                 {result.tipo === "pj" && result.pjDocType && (
@@ -309,7 +378,6 @@ const Resultado = () => {
                 </ul>
               </div>
 
-              {/* BLOCO 4 — TABELA DE SCORE */}
               <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
                 <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "8px" }}>Detalhamento da Pontuação</p>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
@@ -359,7 +427,6 @@ const Resultado = () => {
                 </div>
               )}
 
-              {/* RODAPÉ */}
               <div style={{ marginTop: "24px", borderTop: "1px solid #d1d5db", paddingTop: "10px", textAlign: "center" }}>
                 <p style={{ fontSize: "8px", color: "#9ca3af", margin: 0 }}>
                   Este relatório constitui ferramenta auxiliar de análise. A decisão final sobre a concessão de crédito é de exclusiva responsabilidade do analista.
@@ -371,18 +438,19 @@ const Resultado = () => {
             </div>
           </div>
 
-          {/* Coluna lateral: Fiadores */}
+          {/* Coluna Fiador */}
           <aside className="space-y-4">
             <div className="rounded-lg border bg-card p-4">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-foreground">Fiadores</h2>
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <UserPlus className="h-4 w-4" /> Fiador
+                </h2>
                 {podeAdicionarFiador && (
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => navigate(`/analise/${result.id}/fiador/novo`)}
                   >
-                    <UserPlus className="mr-1 h-4 w-4" />
                     {fiadores.length === 0 ? "Adicionar" : "Outro"}
                   </Button>
                 )}
@@ -447,10 +515,50 @@ const Resultado = () => {
                 })}
               </div>
             </div>
-
             <p className="text-xs text-muted-foreground">
-              A decisão e o ajuste manual continuam aplicando ao titular. Score do fiador é
-              informativo.
+              Score do fiador é informativo. A decisão e o ajuste manual aplicam ao titular.
+            </p>
+          </aside>
+
+          {/* Coluna Bureau */}
+          <aside className="space-y-4">
+            <div className="rounded-lg border bg-card p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <ShieldAlert className="h-4 w-4" /> Bureau de crédito
+                </h2>
+                {podeAdicionarFiador && !bureau && (
+                  <Button size="sm" variant="outline" onClick={() => setBureauModalOpen(true)}>
+                    Anexar
+                  </Button>
+                )}
+                {podeAdicionarFiador && bureau && (
+                  <Button size="sm" variant="ghost" onClick={() => setBureauModalOpen(true)}>
+                    Substituir
+                  </Button>
+                )}
+              </div>
+
+              {!podeAdicionarFiador && (
+                <p className="text-xs text-muted-foreground">
+                  Análise antiga sem id persistido. Não é possível anexar bureau.
+                </p>
+              )}
+
+              {podeAdicionarFiador && carregandoBureau && (
+                <p className="text-xs text-muted-foreground">Carregando bureau…</p>
+              )}
+
+              {podeAdicionarFiador && !carregandoBureau && !bureau && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum relatório de Serasa ou Boa Vista anexado.
+                </p>
+              )}
+
+              {bureau && <BureauResumo bureau={bureau} />}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Bureau é informativo. Não altera o score do titular.
             </p>
           </aside>
         </div>
@@ -465,6 +573,7 @@ const Resultado = () => {
           </Button>
         </div>
 
+        {/* Manual adjust dialog */}
         <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
           <DialogContent>
             <DialogHeader>
@@ -484,6 +593,81 @@ const Resultado = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Bureau upload dialog */}
+        <Dialog
+          open={bureauModalOpen}
+          onOpenChange={(v) => {
+            if (bureauUploading) return;
+            setBureauModalOpen(v);
+            if (!v) {
+              setBureauFile([]);
+              setBureauProgress("");
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Anexar relatório de bureau</DialogTitle>
+              <DialogDescription>
+                Os dados extraídos são puramente informativos e não alteram o score do titular.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label>Bureau</Label>
+                <RadioGroup
+                  value={bureauTipo}
+                  onValueChange={(v) => setBureauTipo(v as BureauTipo)}
+                  className="flex gap-6"
+                  disabled={bureauUploading}
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="serasa" id="b-serasa" />
+                    <Label htmlFor="b-serasa" className="cursor-pointer font-normal">
+                      Serasa
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="boa_vista" id="b-bv" />
+                    <Label htmlFor="b-bv" className="cursor-pointer font-normal">
+                      Boa Vista
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <FileDropzone
+                label="Upload do relatório do bureau (1 PDF)"
+                maxFiles={1}
+                files={bureauFile}
+                onFilesChange={setBureauFile}
+              />
+
+              {bureauUploading && (
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {bureauProgress || "Processando…"}
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setBureauModalOpen(false)}
+                disabled={bureauUploading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleUploadBureau}
+                disabled={bureauUploading || bureauFile.length === 0}
+              >
+                {bureauUploading ? "Processando…" : "Extrair e salvar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
@@ -495,5 +679,100 @@ const Row = ({ label, value }: { label: string; value: string }) => (
     <td style={{ padding: "3px 0", fontWeight: 500 }}>{value}</td>
   </tr>
 );
+
+const Linha = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-baseline justify-between gap-2 text-xs">
+    <span className="text-muted-foreground">{label}</span>
+    <span className="font-medium text-foreground">{value}</span>
+  </div>
+);
+
+const BureauResumo = ({ bureau }: { bureau: Bureau }) => {
+  const d = bureau.dados_extraidos || ({} as Bureau["dados_extraidos"]);
+  const restritivosLinhas: { label: string; quantidade: number | null; valor: number | null }[] = [
+    { label: "Pefin", quantidade: d.pefin?.quantidade ?? null, valor: d.pefin?.valor_total ?? null },
+    { label: "Refin", quantidade: d.refin?.quantidade ?? null, valor: d.refin?.valor_total ?? null },
+    {
+      label: "Protestos",
+      quantidade: d.protestos?.quantidade ?? null,
+      valor: d.protestos?.valor_total ?? null,
+    },
+    {
+      label: "Ações judiciais",
+      quantidade: d.acoes_judiciais?.quantidade ?? null,
+      valor: d.acoes_judiciais?.valor_total ?? null,
+    },
+    {
+      label: "CCF (cheques)",
+      quantidade: d.ccf_cheques_sem_fundo?.quantidade ?? null,
+      valor: d.ccf_cheques_sem_fundo?.valor_total ?? null,
+    },
+  ];
+
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-semibold uppercase">
+          {bureau.bureau === "serasa" ? "Serasa" : "Boa Vista"}
+        </span>
+        {d.data_consulta && (
+          <span className="text-[11px] text-muted-foreground">{d.data_consulta}</span>
+        )}
+      </div>
+
+      {(d.nome_consultado || d.documento_consultado) && (
+        <div>
+          <p className="truncate text-xs font-medium text-foreground">
+            {d.nome_consultado || "—"}
+          </p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {d.documento_consultado || "—"}
+          </p>
+        </div>
+      )}
+
+      {(d.score_valor !== null || d.score_classificacao) && (
+        <div className="rounded-md border bg-background p-3">
+          <p className="text-[10px] uppercase text-muted-foreground">Score do bureau</p>
+          <p className="text-2xl font-bold text-foreground">{fmtNumber(d.score_valor)}</p>
+          {d.score_classificacao && (
+            <p className="text-xs text-muted-foreground">{d.score_classificacao}</p>
+          )}
+          {typeof d.probabilidade_inadimplencia === "number" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Prob. inadimplência: {d.probabilidade_inadimplencia}%
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <p className="text-[10px] uppercase text-muted-foreground">Restrições</p>
+        {restritivosLinhas.map((l) => (
+          <Linha
+            key={l.label}
+            label={l.label}
+            value={`${fmtNumber(l.quantidade)} · ${fmtMoney(l.valor)}`}
+          />
+        ))}
+      </div>
+
+      {d.consultas_recentes && (
+        <div className="space-y-1">
+          <p className="text-[10px] uppercase text-muted-foreground">Consultas recentes</p>
+          <Linha label="Últimos 30 dias" value={fmtNumber(d.consultas_recentes.ultimos_30_dias)} />
+          <Linha label="Últimos 90 dias" value={fmtNumber(d.consultas_recentes.ultimos_90_dias)} />
+          <Linha label="Últimos 180 dias" value={fmtNumber(d.consultas_recentes.ultimos_180_dias)} />
+        </div>
+      )}
+
+      {bureau.pdf_filename && (
+        <p className="truncate text-[10px] text-muted-foreground">
+          Arquivo: {bureau.pdf_filename}
+        </p>
+      )}
+    </div>
+  );
+};
 
 export default Resultado;
