@@ -356,11 +356,31 @@ function AddCustomDialog({
 
 // ─── Main Page ─────────────────────────────────
 export default function Configuracoes() {
-  const [config, setConfig] = useState<ScoringConfig>(() => loadConfig());
-  const [savedConfig, setSavedConfig] = useState<string>(() => JSON.stringify(loadConfig()));
+  const [config, setConfig] = useState<ScoringConfig>(() => structuredClone(DEFAULT_CONFIG));
+  const [savedConfig, setSavedConfig] = useState<string>(() => JSON.stringify(DEFAULT_CONFIG));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [addCustomOpen, setAddCustomOpen] = useState(false);
   const [editingCustom, setEditingCustom] = useState<CustomCriterion | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        await migrateLocalConfigIfNeeded();
+        const loaded = await getScoringConfig();
+        if (!alive) return;
+        setConfig(loaded);
+        setSavedConfig(JSON.stringify(loaded));
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao carregar configurações.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const hasChanges = useMemo(() => JSON.stringify(config) !== savedConfig, [config, savedConfig]);
   const totals = useMemo(() => ({
@@ -370,22 +390,36 @@ export default function Configuracoes() {
   }), [config]);
   const invalidTotals = Object.values(totals).some((total) => total !== 1000);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (invalidTotals) {
       toast.error("A soma dos pesos de todas as abas deve ser exatamente 1000 antes de salvar.");
       return;
     }
-    saveConfig(config);
-    setSavedConfig(JSON.stringify(config));
-    toast.success("Configurações salvas com sucesso.");
+    setSaving(true);
+    try {
+      await saveScoringConfig(config);
+      setSavedConfig(JSON.stringify(config));
+      toast.success("Configurações salvas.");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar configurações.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     const def = structuredClone(DEFAULT_CONFIG);
-    setConfig(def);
-    saveConfig(def);
-    setSavedConfig(JSON.stringify(def));
-    toast.success("Configurações restauradas para os valores padrão.");
+    setSaving(true);
+    try {
+      await saveScoringConfig(def);
+      setConfig(def);
+      setSavedConfig(JSON.stringify(def));
+      toast.success("Configurações restauradas para os valores padrão.");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao restaurar configurações.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleExport = () => exportConfig({ ...config, descricao: config.descricao || "Preset de pontuação POSSIBLE" });
