@@ -54,6 +54,22 @@ const Historico = () => {
     reload();
   }, [reload]);
 
+  useEffect(() => {
+    let list = [...history];
+    if (filterTipo !== "todos") list = list.filter((r) => r.tipo === filterTipo);
+    if (filterDecisao !== "todos") list = list.filter((r) => r.decision === filterDecisao);
+    if (filterDe) {
+      const de = new Date(filterDe);
+      list = list.filter((r) => new Date(r.data) >= de);
+    }
+    if (filterAte) {
+      const ate = new Date(filterAte);
+      ate.setHours(23, 59, 59);
+      list = list.filter((r) => new Date(r.data) <= ate);
+    }
+    setFilteredHistory(list);
+  }, [history, filterTipo, filterDecisao, filterDe, filterAte]);
+
   const handleView = (r: ScoringResult) => {
     navigate("/resultado", {
       state: {
@@ -265,10 +281,6 @@ const Historico = () => {
                           <Button variant="ghost" size="sm" onClick={() => handleExportPDF(r)} title="Exportar PDF">
                             <Download className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setDeleteIdx(i)} title="Excluir"
-                            className="text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -280,13 +292,13 @@ const Historico = () => {
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground text-right">
-          {filteredHistory.length} de {history.length} análise(s)
+          {loading ? (
+            <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Carregando...</span>
+          ) : (
+            <>{filteredHistory.length} de {history.length} análise(s)</>
+          )}
         </p>
       </main>
-
-      {/* Delete confirmation */}
-      <AlertDialog open={deleteIdx !== null} onOpenChange={(open) => !open && setDeleteIdx(null)}>
-        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir análise?</AlertDialogTitle>
             <AlertDialogDescription>
