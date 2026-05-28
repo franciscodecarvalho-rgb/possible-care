@@ -21,6 +21,13 @@ type AnaliseRow = {
   data: string;
   created_by?: string | null;
   cliente_id?: string | null;
+  limite_sugerido: number | null;
+  parcelas_sugeridas: number | null;
+  validade_analise: string | null;
+  limite_aprovado: number | null;
+  parcelas_aprovadas: number | null;
+  limite_ajustado_manualmente: boolean | null;
+  justificativa_ajuste: string | null;
 };
 
 const toRow = (
@@ -43,6 +50,13 @@ const toRow = (
   data: r.data,
   created_by: userId,
   cliente_id: clienteId,
+  limite_sugerido: r.limiteSugerido ?? null,
+  parcelas_sugeridas: r.parcelasSugeridas ?? null,
+  validade_analise: r.validadeAnalise ?? null,
+  limite_aprovado: r.limiteAprovado ?? null,
+  parcelas_aprovadas: r.parcelasAprovadas ?? null,
+  limite_ajustado_manualmente: r.limiteAjustadoManualmente ?? false,
+  justificativa_ajuste: r.justificativaAjuste ?? null,
 });
 
 const fromRow = (row: any): ScoringResult => ({
@@ -61,6 +75,13 @@ const fromRow = (row: any): ScoringResult => ({
   manualAdjustment: row.manual_adjustment ?? undefined,
   data: row.data,
   clienteId: row.cliente_id ?? null,
+  limiteSugerido: row.limite_sugerido ?? null,
+  parcelasSugeridas: row.parcelas_sugeridas ?? null,
+  validadeAnalise: row.validade_analise ?? null,
+  limiteAprovado: row.limite_aprovado ?? null,
+  parcelasAprovadas: row.parcelas_aprovadas ?? null,
+  limiteAjustadoManualmente: row.limite_ajustado_manualmente ?? false,
+  justificativaAjuste: row.justificativa_ajuste ?? null,
 });
 
 const getUserId = async (): Promise<string | null> => {

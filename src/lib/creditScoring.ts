@@ -1,7 +1,7 @@
 // Credit Scoring Engine — Pessoa Física (IRPF) + Pessoa Jurídica (PJ)
 // Reads configurable parameters from localStorage via scoringConfig
 
-import { loadConfig, type ScoringConfig } from "./scoringConfig";
+import { loadConfig, type ScoringConfig, type RegraLimite } from "./scoringConfig";
 // Note: persistence is handled by the caller (Resultado.tsx) via historyService.
 
 export interface ScoreBreakdown {
@@ -27,7 +27,53 @@ export interface ScoringResult {
   extractedData: Record<string, any>;
   formData: { valor: number; prazo: number; finalidade: string };
   clienteId?: string | null;
+  limiteSugerido?: number | null;
+  parcelasSugeridas?: number | null;
+  validadeAnalise?: string | null;
+  limiteAprovado?: number | null;
+  parcelasAprovadas?: number | null;
+  limiteAjustadoManualmente?: boolean;
+  justificativaAjuste?: string | null;
 }
+
+const acharRegraLimite = (score: number, regras: RegraLimite[]): RegraLimite | null => {
+  if (!Array.isArray(regras) || regras.length === 0) return null;
+  for (const r of regras) {
+    if (score >= r.scoreMin && score <= r.scoreMax) return r;
+  }
+  return null;
+};
+
+const somarDias = (isoData: string, dias: number): string => {
+  const d = new Date(isoData);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+};
+
+const calcularLiberacao = (
+  score: number,
+  valorSolicitado: number,
+  prazoMeses: number,
+  dataAnaliseISO: string,
+  config: ScoringConfig,
+  insufficientData: boolean,
+) => {
+  if (insufficientData) {
+    return { limiteSugerido: null, parcelasSugeridas: null, validadeAnalise: null };
+  }
+  const regra = acharRegraLimite(score, config.regrasLimite);
+  if (!regra) {
+    return { limiteSugerido: null, parcelasSugeridas: null, validadeAnalise: null };
+  }
+  const limiteSugerido = Math.round(valorSolicitado * (regra.percentual / 100) * 100) / 100;
+  const parcelasSugeridas = regra.parcelasMax > 0 ? Math.min(prazoMeses, regra.parcelasMax) : 0;
+  const dias =
+    typeof config.validadeAnaliseDias === "number" && config.validadeAnaliseDias > 0
+      ? config.validadeAnaliseDias
+      : 90;
+  const validadeAnalise = somarDias(dataAnaliseISO, dias);
+  return { limiteSugerido, parcelasSugeridas, validadeAnalise };
+};
 
 const generateProtocolo = (): string => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -182,10 +228,20 @@ export function scorePF(
   const score = breakdown.reduce((s, b) => s + b.points, 0);
   const { decision, decisionColor } = makeDecision(score, insufficientData, config);
 
+  const dataAnalise = new Date().toISOString();
+  const liberacao = calcularLiberacao(score, valor, prazo, dataAnalise, config, insufficientData);
+
   const result: ScoringResult = {
     score, breakdown, decision, decisionColor, insufficientData,
-    protocolo: generateProtocolo(), data: new Date().toISOString(), tipo: "pf",
+    protocolo: generateProtocolo(), data: dataAnalise, tipo: "pf",
     extractedData, formData: { valor, prazo, finalidade },
+    limiteSugerido: liberacao.limiteSugerido,
+    parcelasSugeridas: liberacao.parcelasSugeridas,
+    validadeAnalise: liberacao.validadeAnalise,
+    limiteAprovado: liberacao.limiteSugerido,
+    parcelasAprovadas: liberacao.parcelasSugeridas,
+    limiteAjustadoManualmente: false,
+    justificativaAjuste: null,
   };
   saveResult(result);
   return result;
@@ -398,11 +454,21 @@ export function scorePJ(
   const score = breakdown.reduce((s, b) => s + b.points, 0);
   const { decision, decisionColor } = makeDecision(score, insufficientData, config);
 
+  const dataAnalise = new Date().toISOString();
+  const liberacao = calcularLiberacao(score, valor, prazo, dataAnalise, config, insufficientData);
+
   const result: ScoringResult = {
     score, breakdown, decision, decisionColor, insufficientData,
-    protocolo: generateProtocolo(), data: new Date().toISOString(), tipo: "pj",
+    protocolo: generateProtocolo(), data: dataAnalise, tipo: "pj",
     pjDocType,
     extractedData, formData: { valor, prazo, finalidade },
+    limiteSugerido: liberacao.limiteSugerido,
+    parcelasSugeridas: liberacao.parcelasSugeridas,
+    validadeAnalise: liberacao.validadeAnalise,
+    limiteAprovado: liberacao.limiteSugerido,
+    parcelasAprovadas: liberacao.parcelasSugeridas,
+    limiteAjustadoManualmente: false,
+    justificativaAjuste: null,
   };
   saveResult(result);
   return result;

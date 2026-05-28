@@ -27,13 +27,20 @@ export type Database = {
           form_data: Json
           id: string
           insufficient_data: boolean
+          justificativa_ajuste: string | null
+          limite_ajustado_manualmente: boolean | null
+          limite_aprovado: number | null
+          limite_sugerido: number | null
           manual_adjustment: Json | null
+          parcelas_aprovadas: number | null
+          parcelas_sugeridas: number | null
           pj_doc_type: string | null
           protocolo: string
           score: number
           score_original: number | null
           tipo: string
           updated_at: string
+          validade_analise: string | null
         }
         Insert: {
           breakdown: Json
@@ -47,13 +54,20 @@ export type Database = {
           form_data: Json
           id?: string
           insufficient_data?: boolean
+          justificativa_ajuste?: string | null
+          limite_ajustado_manualmente?: boolean | null
+          limite_aprovado?: number | null
+          limite_sugerido?: number | null
           manual_adjustment?: Json | null
+          parcelas_aprovadas?: number | null
+          parcelas_sugeridas?: number | null
           pj_doc_type?: string | null
           protocolo: string
           score: number
           score_original?: number | null
           tipo: string
           updated_at?: string
+          validade_analise?: string | null
         }
         Update: {
           breakdown?: Json
@@ -67,13 +81,20 @@ export type Database = {
           form_data?: Json
           id?: string
           insufficient_data?: boolean
+          justificativa_ajuste?: string | null
+          limite_ajustado_manualmente?: boolean | null
+          limite_aprovado?: number | null
+          limite_sugerido?: number | null
           manual_adjustment?: Json | null
+          parcelas_aprovadas?: number | null
+          parcelas_sugeridas?: number | null
           pj_doc_type?: string | null
           protocolo?: string
           score?: number
           score_original?: number | null
           tipo?: string
           updated_at?: string
+          validade_analise?: string | null
         }
         Relationships: [
           {

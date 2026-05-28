@@ -34,6 +34,13 @@ export interface FinancialParams {
   percentualMinimoExtracoes: number;
 }
 
+export interface RegraLimite {
+  scoreMin: number;
+  scoreMax: number;
+  percentual: number;
+  parcelasMax: number;
+}
+
 export interface ScoringConfig {
   descricao?: string;
   pfIrpf: CriterionConfig[];
@@ -44,6 +51,7 @@ export interface ScoringConfig {
   corteFiadorPf: number;
   corteFiadorPj: number;
   validadeAnaliseDias: number;
+  regrasLimite: RegraLimite[];
 }
 
 const STORAGE_KEY = "scoring_config";
@@ -212,6 +220,13 @@ export const DEFAULT_CONFIG: ScoringConfig = {
   corteFiadorPf: 600,
   corteFiadorPj: 700,
   validadeAnaliseDias: 90,
+  regrasLimite: [
+    { scoreMin: 900, scoreMax: 1000, percentual: 100, parcelasMax: 48 },
+    { scoreMin: 800, scoreMax: 899, percentual: 80, parcelasMax: 36 },
+    { scoreMin: 700, scoreMax: 799, percentual: 60, parcelasMax: 24 },
+    { scoreMin: 600, scoreMax: 699, percentual: 40, parcelasMax: 12 },
+    { scoreMin: 0, scoreMax: 599, percentual: 0, parcelasMax: 0 },
+  ],
 };
 
 const mergeCriteria = (defaults: CriterionConfig[], saved?: CriterionConfig[]) => {
@@ -238,6 +253,10 @@ const normalizeConfig = (parsed: Partial<ScoringConfig>): ScoringConfig => ({
   corteFiadorPf: typeof parsed.corteFiadorPf === "number" ? parsed.corteFiadorPf : DEFAULT_CONFIG.corteFiadorPf,
   corteFiadorPj: typeof parsed.corteFiadorPj === "number" ? parsed.corteFiadorPj : DEFAULT_CONFIG.corteFiadorPj,
   validadeAnaliseDias: typeof parsed.validadeAnaliseDias === "number" ? parsed.validadeAnaliseDias : DEFAULT_CONFIG.validadeAnaliseDias,
+  regrasLimite:
+    Array.isArray(parsed.regrasLimite) && parsed.regrasLimite.length > 0
+      ? parsed.regrasLimite
+      : structuredClone(DEFAULT_CONFIG.regrasLimite),
 });
 
 export function loadConfig(): ScoringConfig {

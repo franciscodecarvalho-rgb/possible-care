@@ -21,6 +21,8 @@ import {
   UserPlus,
   ShieldAlert,
   Loader2,
+  Wallet,
+  Save,
 } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import FileDropzone from "@/components/FileDropzone";
@@ -77,6 +79,10 @@ const Resultado = () => {
   const [bureauFile, setBureauFile] = useState<File[]>([]);
   const [bureauUploading, setBureauUploading] = useState(false);
   const [bureauProgress, setBureauProgress] = useState("");
+  const [limiteAprovadoInput, setLimiteAprovadoInput] = useState<string>("");
+  const [parcelasAprovadasInput, setParcelasAprovadasInput] = useState<string>("");
+  const [justificativaInput, setJustificativaInput] = useState<string>("");
+  const [salvandoLiberacao, setSalvandoLiberacao] = useState(false);
 
   const extractedData = location.state?.extractedData as Record<string, any> | undefined;
   const tipo = (location.state?.tipo as string) || "pf";
@@ -137,6 +143,21 @@ const Resultado = () => {
     }
   }, [result]);
 
+  useEffect(() => {
+    if (!result) return;
+    const limiteEdit =
+      result.limiteAprovado ??
+      result.limiteSugerido ??
+      null;
+    const parcelasEdit =
+      result.parcelasAprovadas ??
+      result.parcelasSugeridas ??
+      null;
+    setLimiteAprovadoInput(limiteEdit !== null ? String(limiteEdit) : "");
+    setParcelasAprovadasInput(parcelasEdit !== null ? String(parcelasEdit) : "");
+    setJustificativaInput(result.justificativaAjuste ?? "");
+  }, [result?.id, result?.limiteSugerido, result?.parcelasSugeridas]);
+
   const handleExportPDF = async () => {
     if (!reportRef.current || !result) return;
     setExporting(true);
@@ -187,6 +208,44 @@ const Resultado = () => {
       toast.success("Ajuste manual registrado no relatório.");
     } catch (e: any) {
       toast.error(e?.message ?? "Falha ao salvar ajuste manual.");
+    }
+  };
+
+  const handleSalvarLiberacao = async () => {
+    if (!result) return;
+    const limiteAprovado = limiteAprovadoInput.trim() === "" ? null : Number(limiteAprovadoInput);
+    const parcelasAprovadas =
+      parcelasAprovadasInput.trim() === "" ? null : Number(parcelasAprovadasInput);
+    if (
+      (limiteAprovadoInput !== "" && (isNaN(limiteAprovado!) || limiteAprovado! < 0)) ||
+      (parcelasAprovadasInput !== "" && (isNaN(parcelasAprovadas!) || parcelasAprovadas! < 0))
+    ) {
+      toast.error("Informe valores numéricos válidos para limite e parcelas.");
+      return;
+    }
+    const diffLimite = limiteAprovado !== (result.limiteSugerido ?? null);
+    const diffParcelas = parcelasAprovadas !== (result.parcelasSugeridas ?? null);
+    const ajustado = diffLimite || diffParcelas;
+    if (ajustado && !justificativaInput.trim()) {
+      toast.error("Justificativa é obrigatória quando a liberação difere da sugestão.");
+      return;
+    }
+    setSalvandoLiberacao(true);
+    try {
+      const next: ScoringResult = {
+        ...result,
+        limiteAprovado,
+        parcelasAprovadas,
+        limiteAjustadoManualmente: ajustado,
+        justificativaAjuste: ajustado ? justificativaInput.trim() : null,
+      };
+      await updateHistoryResult(next);
+      setResult(next);
+      toast.success("Liberação salva.");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao salvar liberação.");
+    } finally {
+      setSalvandoLiberacao(false);
     }
   };
 
@@ -563,6 +622,109 @@ const Resultado = () => {
           </aside>
         </div>
 
+        {/* Liberação */}
+        <section className="mt-6 rounded-lg border bg-card p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">Liberação</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-3 rounded-md border bg-muted/40 p-4">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Liberação sugerida
+              </p>
+              <SugestaoLinha
+                label="Limite"
+                value={
+                  typeof result.limiteSugerido === "number" ? fmt(result.limiteSugerido) : "—"
+                }
+              />
+              <SugestaoLinha
+                label="Parcelas"
+                value={
+                  typeof result.parcelasSugeridas === "number"
+                    ? `até ${result.parcelasSugeridas}x`
+                    : "—"
+                }
+              />
+              <SugestaoLinha
+                label="Validade"
+                value={result.validadeAnalise ? formatarDataISO(result.validadeAnalise) : "—"}
+              />
+              <p className="text-[11px] italic text-muted-foreground">
+                Calculado automaticamente a partir do score, valor solicitado e regras de limite.
+              </p>
+            </div>
+
+            <div className="space-y-3 rounded-md border p-4">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Liberação aprovada (editável)
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="limiteAprovado">Limite aprovado (R$)</Label>
+                <Input
+                  id="limiteAprovado"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={limiteAprovadoInput}
+                  onChange={(e) => setLimiteAprovadoInput(e.target.value)}
+                  disabled={!result.id || salvandoLiberacao}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="parcelasAprovadas">Parcelas aprovadas</Label>
+                <Input
+                  id="parcelasAprovadas"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={parcelasAprovadasInput}
+                  onChange={(e) => setParcelasAprovadasInput(e.target.value)}
+                  disabled={!result.id || salvandoLiberacao}
+                />
+              </div>
+              {liberacaoDiferente(result, limiteAprovadoInput, parcelasAprovadasInput) && (
+                <div className="space-y-2">
+                  <Label htmlFor="justificativaAjuste" className="text-yellow-700">
+                    Justificativa (obrigatória — liberação difere da sugestão)
+                  </Label>
+                  <Textarea
+                    id="justificativaAjuste"
+                    value={justificativaInput}
+                    onChange={(e) => setJustificativaInput(e.target.value)}
+                    placeholder="Descreva o motivo da diferença"
+                    disabled={salvandoLiberacao}
+                  />
+                </div>
+              )}
+              <Button
+                size="sm"
+                onClick={handleSalvarLiberacao}
+                disabled={!result.id || salvandoLiberacao}
+                className="bg-navy text-navy-foreground hover:bg-navy-light"
+              >
+                {salvandoLiberacao ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                {salvandoLiberacao ? "Salvando…" : "Salvar liberação"}
+              </Button>
+              {!result.id && (
+                <p className="text-[11px] italic text-muted-foreground">
+                  Análise antiga sem id persistido — não é possível salvar liberação.
+                </p>
+              )}
+              {result.limiteAjustadoManualmente && result.justificativaAjuste && (
+                <p className="rounded-md bg-yellow-500/10 px-3 py-2 text-[11px] text-yellow-900">
+                  Liberação ajustada manualmente · Motivo: {result.justificativaAjuste}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* Bottom actions */}
         <div className="mx-auto mt-6 flex max-w-md gap-3">
           <Button variant="outline" className="flex-1" onClick={() => navigate("/historico")}>
@@ -679,6 +841,31 @@ const Row = ({ label, value }: { label: string; value: string }) => (
     <td style={{ padding: "3px 0", fontWeight: 500 }}>{value}</td>
   </tr>
 );
+
+const SugestaoLinha = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-baseline justify-between gap-2">
+    <span className="text-xs text-muted-foreground">{label}</span>
+    <span className="text-sm font-semibold text-foreground">{value}</span>
+  </div>
+);
+
+const formatarDataISO = (iso: string) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("pt-BR");
+};
+
+const liberacaoDiferente = (
+  result: ScoringResult,
+  limiteInput: string,
+  parcelasInput: string,
+): boolean => {
+  const limite = limiteInput.trim() === "" ? null : Number(limiteInput);
+  const parcelas = parcelasInput.trim() === "" ? null : Number(parcelasInput);
+  const diffLimite = limite !== (result.limiteSugerido ?? null);
+  const diffParcelas = parcelas !== (result.parcelasSugeridas ?? null);
+  return diffLimite || diffParcelas;
+};
 
 const Linha = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-baseline justify-between gap-2 text-xs">
