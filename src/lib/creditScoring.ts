@@ -2,7 +2,7 @@
 // Reads configurable parameters from localStorage via scoringConfig
 
 import { loadConfig, type ScoringConfig } from "./scoringConfig";
-import { saveHistoryResult } from "./historyStorage";
+// Note: persistence is handled by the caller (Resultado.tsx) via historyService.
 
 export interface ScoreBreakdown {
   category: string;
@@ -77,9 +77,8 @@ function makeDecision(score: number, insufficientData: boolean, config: ScoringC
   return { decision: lowest?.label || "INDEFINIDO", decisionColor: lowest?.color || "#6b7280" };
 }
 
-function saveResult(result: ScoringResult) {
-  saveHistoryResult(result);
-}
+// no-op: kept for backward compatibility within this file
+function saveResult(_result: ScoringResult) {}
 
 // ===================== PF SCORING =====================
 export function scorePF(
