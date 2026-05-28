@@ -46,6 +46,17 @@ const Header = () => {
             Nova Análise
           </Link>
           <Link
+            to="/clientes"
+            className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              location.pathname.startsWith("/clientes")
+                ? "bg-navy-light text-navy-foreground"
+                : "text-navy-foreground/70 hover:bg-navy-light/50 hover:text-navy-foreground"
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            Clientes
+          </Link>
+          <Link
             to="/historico"
             className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               location.pathname === "/historico"
