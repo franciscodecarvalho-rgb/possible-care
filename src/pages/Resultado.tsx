@@ -5,12 +5,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Download, SlidersHorizontal } from "lucide-react";
+import { FileText, Download, SlidersHorizontal, AlertTriangle, UserPlus } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { useEffect, useRef, useState } from "react";
 import { scorePF, scorePJ, type ScoringResult } from "@/lib/creditScoring";
 import { generateAnalysis } from "@/lib/reportAnalysis";
 import { saveHistoryResult, updateHistoryResult } from "@/lib/historyService";
+import { listarFiadores, type Fiador } from "@/lib/fiadorService";
+import { loadConfig } from "@/lib/scoringConfig";
+import { maskDocumento } from "@/lib/clienteService";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
@@ -35,10 +38,13 @@ const Resultado = () => {
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustPoints, setAdjustPoints] = useState(0);
   const [adjustJustification, setAdjustJustification] = useState("");
+  const [fiadores, setFiadores] = useState<Fiador[]>([]);
+  const [carregandoFiadores, setCarregandoFiadores] = useState(false);
 
   const extractedData = location.state?.extractedData as Record<string, any> | undefined;
   const tipo = (location.state?.tipo as string) || "pf";
   const formData = location.state?.formData as { valor: number; prazo: number; finalidade: string } | undefined;
+  const clienteIdState = (location.state?.clienteId as string | undefined) ?? null;
 
   useEffect(() => {
     if (location.state?.fromHistory) {
@@ -53,13 +59,32 @@ const Resultado = () => {
       r = scorePJ(extractedData, formData.valor, formData.prazo, formData.finalidade);
     }
     if (r) {
-      setResult(r);
-      saveHistoryResult(r).catch((e) => {
-        console.error(e);
-        toast.error("Falha ao salvar análise no histórico.");
-      });
+      const computed = r;
+      saveHistoryResult(computed, clienteIdState)
+        .then(({ id }) => setResult({ ...computed, id, clienteId: clienteIdState }))
+        .catch((e) => {
+          console.error(e);
+          toast.error("Falha ao salvar análise no histórico.");
+          setResult(computed);
+        });
     }
   }, []);
+
+  useEffect(() => {
+    if (!result?.id) {
+      setFiadores([]);
+      return;
+    }
+    let alive = true;
+    setCarregandoFiadores(true);
+    listarFiadores(result.id)
+      .then((data) => alive && setFiadores(data))
+      .catch((e) => alive && toast.error(e?.message || "Erro ao carregar fiadores."))
+      .finally(() => alive && setCarregandoFiadores(false));
+    return () => {
+      alive = false;
+    };
+  }, [result?.id]);
 
   // Auto-export when coming from history with autoExport flag
   useEffect(() => {
@@ -137,10 +162,16 @@ const Resultado = () => {
   const ed = result.extractedData || {};
   const fd = result.formData;
 
+  const config = loadConfig();
+  const corteFiador = result.tipo === "pj" ? config.corteFiadorPj : config.corteFiadorPf;
+  const abaixoDoCorte = !result.insufficientData && result.score < corteFiador;
+  const exigeFiador = abaixoDoCorte && fiadores.length === 0;
+  const podeAdicionarFiador = Boolean(result.id);
+
   return (
     <div className="min-h-screen bg-muted">
       <Header />
-      <main className="container mx-auto max-w-4xl px-4 py-8">
+      <main className="container mx-auto max-w-6xl px-4 py-8">
         {/* Action bar */}
         <div className="mb-6 flex items-center justify-between">
           <BackButton to={location.state?.fromHistory ? "/historico" : "/preview"} />
@@ -163,157 +194,265 @@ const Resultado = () => {
           </div>
         </div>
 
-        {/* A4 Sheet */}
-        <div
-          ref={reportRef}
-          className="mx-auto bg-white shadow-xl"
-          style={{
-            width: "210mm",
-            minHeight: "297mm",
-            padding: "15mm",
-            fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
-            color: "#1a1a2e",
-            fontSize: "11px",
-            lineHeight: "1.5",
-          }}
-        >
-          {/* HEADER */}
-          <div style={{ textAlign: "center", borderBottom: "2px solid #1e3a5f", paddingBottom: "10px", marginBottom: "16px" }}>
-            <h1 style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#1e3a5f" }}>
-              RELATÓRIO DE ANÁLISE DE CRÉDITO
-            </h1>
-            <p style={{ fontSize: "10px", color: "#6b7280", marginTop: "6px" }}>
-              Data: {fmtDate(result.data)} &nbsp;|&nbsp; Protocolo: {result.protocolo} &nbsp;|&nbsp; Tipo: {tipo === "pf" ? "Pessoa Física" : "Pessoa Jurídica"}
-            </p>
-          </div>
-
-          {/* BLOCO 1 — SCORE */}
-          <div style={{ textAlign: "center", padding: "16px 0", marginBottom: "16px" }}>
-            <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", color: "#6b7280", margin: 0 }}>
-              Score de Crédito
-            </p>
-            <p style={{ fontSize: "48px", fontWeight: 800, color: result.decisionColor, margin: "4px 0 0 0", lineHeight: 1.1 }}>
-              {result.score} <span style={{ fontSize: "18px", fontWeight: 400, color: "#9ca3af" }}>/ 1000</span>
-            </p>
-            {/* Progress bar */}
-            <div style={{ maxWidth: "400px", margin: "12px auto 0", background: "#e5e7eb", borderRadius: "6px", height: "10px", overflow: "hidden" }}>
-              <div style={{ width: `${(result.score / 1000) * 100}%`, height: "100%", borderRadius: "6px", background: result.decisionColor, transition: "width 0.5s" }} />
+        {/* Banner de corte de fiador */}
+        {exigeFiador && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700" />
+              <p className="text-sm text-yellow-900">
+                Score abaixo do corte ({corteFiador}). Esta análise exige cadastro de fiador.
+              </p>
             </div>
-            {/* Decision badge */}
+            {podeAdicionarFiador && (
+              <Button
+                size="sm"
+                onClick={() => navigate(`/analise/${result.id}/fiador/novo`)}
+                className="bg-yellow-600 text-white hover:bg-yellow-700"
+              >
+                <UserPlus className="mr-2 h-4 w-4" /> Adicionar fiador
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Layout 2 colunas: Titular | Fiadores */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Coluna do titular (A4 sheet) — 2 colunas */}
+          <div className="lg:col-span-2">
             <div
+              ref={reportRef}
+              className="mx-auto bg-white shadow-xl"
               style={{
-                display: "inline-block",
-                marginTop: "12px",
-                padding: "6px 20px",
-                borderRadius: "20px",
-                fontSize: "12px",
-                fontWeight: 700,
-                color: "#fff",
-                backgroundColor: result.decisionColor,
+                width: "210mm",
+                maxWidth: "100%",
+                minHeight: "297mm",
+                padding: "15mm",
+                fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+                color: "#1a1a2e",
+                fontSize: "11px",
+                lineHeight: "1.5",
               }}
             >
-              {result.decision}
-            </div>
-          </div>
+              {/* HEADER */}
+              <div style={{ textAlign: "center", borderBottom: "2px solid #1e3a5f", paddingBottom: "10px", marginBottom: "16px" }}>
+                <h1 style={{ fontSize: "18px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#1e3a5f" }}>
+                  RELATÓRIO DE ANÁLISE DE CRÉDITO
+                </h1>
+                <p style={{ fontSize: "10px", color: "#6b7280", marginTop: "6px" }}>
+                  Data: {fmtDate(result.data)} &nbsp;|&nbsp; Protocolo: {result.protocolo} &nbsp;|&nbsp; Tipo: {tipo === "pf" ? "Pessoa Física" : "Pessoa Jurídica"}
+                </p>
+              </div>
 
-          {/* BLOCO 2 — IDENTIFICAÇÃO */}
-          <div style={{ display: "flex", gap: "24px", marginBottom: "16px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Identificação</p>
-              <table style={{ width: "100%", fontSize: "11px" }}>
-                <tbody>
-                  <Row label="Nome" value={ed.nome_completo || ed.razao_social || ed.balancos?.razao_social || "NÃO INFORMADO"} />
-                  <Row label="CPF/CNPJ" value={ed.cpf || ed.cnpj || ed.balancos?.cnpj || ed.faturamento?.cnpj || "NÃO INFORMADO"} />
-                  {result.tipo === "pf" && <Row label="Ocupação" value={ed.ocupacao || "NÃO INFORMADO"} />}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Solicitação</p>
-              <table style={{ width: "100%", fontSize: "11px" }}>
-                <tbody>
-                  <Row label="Valor" value={fmt(fd.valor)} />
-                  <Row label="Prazo" value={`${fd.prazo} meses`} />
-                </tbody>
-              </table>
-            </div>
-          </div>
+              {/* BLOCO 1 — SCORE */}
+              <div style={{ textAlign: "center", padding: "16px 0", marginBottom: "16px" }}>
+                <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", color: "#6b7280", margin: 0 }}>
+                  Score de Crédito
+                </p>
+                <p style={{ fontSize: "48px", fontWeight: 800, color: result.decisionColor, margin: "4px 0 0 0", lineHeight: 1.1 }}>
+                  {result.score} <span style={{ fontSize: "18px", fontWeight: 400, color: "#9ca3af" }}>/ 1000</span>
+                </p>
+                <div style={{ maxWidth: "400px", margin: "12px auto 0", background: "#e5e7eb", borderRadius: "6px", height: "10px", overflow: "hidden" }}>
+                  <div style={{ width: `${(result.score / 1000) * 100}%`, height: "100%", borderRadius: "6px", background: result.decisionColor, transition: "width 0.5s" }} />
+                </div>
+                <div
+                  style={{
+                    display: "inline-block",
+                    marginTop: "12px",
+                    padding: "6px 20px",
+                    borderRadius: "20px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "#fff",
+                    backgroundColor: result.decisionColor,
+                  }}
+                >
+                  {result.decision}
+                </div>
+              </div>
 
-          {/* BLOCO 3 — RESUMO ANALÍTICO */}
-          <div style={{ marginBottom: "16px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
-            <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "8px" }}>Resumo Analítico</p>
-            {result.tipo === "pj" && result.pjDocType && (
-              <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginBottom: "8px", padding: "6px 10px", background: "#f3f4f6", borderRadius: "4px" }}>
-                Análise baseada em {result.pjDocType === "balancos" ? "Balanços Patrimoniais" : "Relatório de Faturamento"}.
-                Critérios sem dados disponíveis foram desconsiderados e seus pesos redistribuídos.
-              </p>
-            )}
-            <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "11px", color: "#374151" }}>
-              {analysis.map((line, i) => (
-                <li key={i} style={{ marginBottom: "4px" }}>{line}</li>
-              ))}
-            </ul>
-          </div>
+              {/* BLOCO 2 — IDENTIFICAÇÃO */}
+              <div style={{ display: "flex", gap: "24px", marginBottom: "16px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Identificação</p>
+                  <table style={{ width: "100%", fontSize: "11px" }}>
+                    <tbody>
+                      <Row label="Nome" value={ed.nome_completo || ed.razao_social || ed.balancos?.razao_social || "NÃO INFORMADO"} />
+                      <Row label="CPF/CNPJ" value={ed.cpf || ed.cnpj || ed.balancos?.cnpj || ed.faturamento?.cnpj || "NÃO INFORMADO"} />
+                      {result.tipo === "pf" && <Row label="Ocupação" value={ed.ocupacao || "NÃO INFORMADO"} />}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Solicitação</p>
+                  <table style={{ width: "100%", fontSize: "11px" }}>
+                    <tbody>
+                      <Row label="Valor" value={fmt(fd.valor)} />
+                      <Row label="Prazo" value={`${fd.prazo} meses`} />
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-          {/* BLOCO 4 — TABELA DE SCORE */}
-          <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
-            <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "8px" }}>Detalhamento da Pontuação</p>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
-              <thead>
-                <tr style={{ borderBottom: "2px solid #d1d5db" }}>
-                  <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 600, color: "#374151" }}>Critério</th>
-                  <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "60px" }}>Máx</th>
-                  <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "60px" }}>Obtido</th>
-                  <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "80px" }}>% Aproveit.</th>
-                  <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "140px" }}>Desempenho</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.breakdown.map((b, i) => {
-                  const pct = (b.points / b.maxPoints) * 100;
-                  return (
-                    <tr key={b.category} style={{ borderBottom: "1px solid #e5e7eb", backgroundColor: i % 2 === 0 ? "#f9fafb" : "#fff" }}>
-                      <td style={{ padding: "6px 8px" }}>{b.category}</td>
-                      <td style={{ textAlign: "center", padding: "6px 8px", color: "#6b7280" }}>{b.maxPoints}</td>
-                      <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600 }}>{b.points}</td>
-                      <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600 }}>{Math.round(pct)}%</td>
-                      <td style={{ padding: "6px 8px" }}>
-                        <div style={{ background: "#e5e7eb", borderRadius: "4px", height: "8px", overflow: "hidden" }}>
-                          <div style={{ width: `${pct}%`, height: "100%", borderRadius: "4px", backgroundColor: barColor(pct) }} />
-                        </div>
-                      </td>
+              {/* BLOCO 3 — RESUMO ANALÍTICO */}
+              <div style={{ marginBottom: "16px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
+                <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "8px" }}>Resumo Analítico</p>
+                {result.tipo === "pj" && result.pjDocType && (
+                  <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginBottom: "8px", padding: "6px 10px", background: "#f3f4f6", borderRadius: "4px" }}>
+                    Análise baseada em {result.pjDocType === "balancos" ? "Balanços Patrimoniais" : "Relatório de Faturamento"}.
+                    Critérios sem dados disponíveis foram desconsiderados e seus pesos redistribuídos.
+                  </p>
+                )}
+                <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "11px", color: "#374151" }}>
+                  {analysis.map((line, i) => (
+                    <li key={i} style={{ marginBottom: "4px" }}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* BLOCO 4 — TABELA DE SCORE */}
+              <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
+                <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "8px" }}>Detalhamento da Pontuação</p>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #d1d5db" }}>
+                      <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 600, color: "#374151" }}>Critério</th>
+                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "60px" }}>Máx</th>
+                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "60px" }}>Obtido</th>
+                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "80px" }}>% Aproveit.</th>
+                      <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 600, color: "#374151", width: "140px" }}>Desempenho</th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    {result.breakdown.map((b, i) => {
+                      const pct = (b.points / b.maxPoints) * 100;
+                      return (
+                        <tr key={b.category} style={{ borderBottom: "1px solid #e5e7eb", backgroundColor: i % 2 === 0 ? "#f9fafb" : "#fff" }}>
+                          <td style={{ padding: "6px 8px" }}>{b.category}</td>
+                          <td style={{ textAlign: "center", padding: "6px 8px", color: "#6b7280" }}>{b.maxPoints}</td>
+                          <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600 }}>{b.points}</td>
+                          <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600 }}>{Math.round(pct)}%</td>
+                          <td style={{ padding: "6px 8px" }}>
+                            <div style={{ background: "#e5e7eb", borderRadius: "4px", height: "8px", overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", borderRadius: "4px", backgroundColor: barColor(pct) }} />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr style={{ borderTop: "2px solid #374151", fontWeight: 700 }}>
+                      <td style={{ padding: "6px 8px" }}>TOTAL</td>
+                      <td style={{ textAlign: "center", padding: "6px 8px" }}>1000</td>
+                      <td style={{ textAlign: "center", padding: "6px 8px", color: result.decisionColor }}>{result.score}</td>
+                      <td style={{ textAlign: "center", padding: "6px 8px", color: result.decisionColor }}>{Math.round((result.score / 1000) * 100)}%</td>
+                      <td />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {result.manualAdjustment && (
+                <div style={{ marginTop: "14px", borderTop: "1px solid #e5e7eb", paddingTop: "10px" }}>
+                  <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Nota de Auditoria — Ajuste Manual</p>
+                  <p style={{ fontSize: "10px", color: "#374151", margin: 0 }}>
+                    Score original: {result.originalScore} | Ajuste: {result.manualAdjustment.points > 0 ? "+" : ""}{result.manualAdjustment.points} pontos | Justificativa: {result.manualAdjustment.justification}
+                  </p>
+                </div>
+              )}
+
+              {/* RODAPÉ */}
+              <div style={{ marginTop: "24px", borderTop: "1px solid #d1d5db", paddingTop: "10px", textAlign: "center" }}>
+                <p style={{ fontSize: "8px", color: "#9ca3af", margin: 0 }}>
+                  Este relatório constitui ferramenta auxiliar de análise. A decisão final sobre a concessão de crédito é de exclusiva responsabilidade do analista.
+                </p>
+                <p style={{ fontSize: "8px", color: "#9ca3af", marginTop: "2px" }}>
+                  Analisador de Crédito - POSSIBLE &nbsp;|&nbsp; {fmtDate(result.data)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Coluna lateral: Fiadores */}
+          <aside className="space-y-4">
+            <div className="rounded-lg border bg-card p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-foreground">Fiadores</h2>
+                {podeAdicionarFiador && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/analise/${result.id}/fiador/novo`)}
+                  >
+                    <UserPlus className="mr-1 h-4 w-4" />
+                    {fiadores.length === 0 ? "Adicionar" : "Outro"}
+                  </Button>
+                )}
+              </div>
+
+              {!podeAdicionarFiador && (
+                <p className="text-xs text-muted-foreground">
+                  Análise antiga sem vínculo persistido. Para cadastrar fiador, refaça a análise pelo
+                  cliente.
+                </p>
+              )}
+
+              {podeAdicionarFiador && carregandoFiadores && (
+                <p className="text-xs text-muted-foreground">Carregando fiadores…</p>
+              )}
+
+              {podeAdicionarFiador && !carregandoFiadores && fiadores.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum fiador cadastrado para esta análise.
+                </p>
+              )}
+
+              <div className="space-y-3">
+                {fiadores.map((f) => {
+                  const tipoFiador = f.tipo as "pf" | "pj";
+                  return (
+                    <div key={f.id} className="rounded-md border bg-background p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{f.nome}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {maskDocumento(f.documento, tipoFiador)} · {tipoFiador.toUpperCase()}
+                          </p>
+                        </div>
+                        <span
+                          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase text-white"
+                          style={{ backgroundColor: f.decision_color }}
+                        >
+                          {f.score}
+                        </span>
+                      </div>
+                      <p
+                        className="mt-2 inline-block rounded px-2 py-0.5 text-[10px] font-semibold text-white"
+                        style={{ backgroundColor: f.decision_color }}
+                      >
+                        {f.decision}
+                      </p>
+                      {Array.isArray(f.breakdown) && f.breakdown.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                          {f.breakdown.slice(0, 4).map((b, i) => (
+                            <li key={i} className="flex justify-between gap-2">
+                              <span className="truncate">{b.category}</span>
+                              <span className="shrink-0 font-medium text-foreground">
+                                {b.points}/{b.maxPoints}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   );
                 })}
-                <tr style={{ borderTop: "2px solid #374151", fontWeight: 700 }}>
-                  <td style={{ padding: "6px 8px" }}>TOTAL</td>
-                  <td style={{ textAlign: "center", padding: "6px 8px" }}>1000</td>
-                  <td style={{ textAlign: "center", padding: "6px 8px", color: result.decisionColor }}>{result.score}</td>
-                  <td style={{ textAlign: "center", padding: "6px 8px", color: result.decisionColor }}>{Math.round((result.score / 1000) * 100)}%</td>
-                  <td />
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {result.manualAdjustment && (
-            <div style={{ marginTop: "14px", borderTop: "1px solid #e5e7eb", paddingTop: "10px" }}>
-              <p style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", color: "#6b7280", marginBottom: "6px" }}>Nota de Auditoria — Ajuste Manual</p>
-              <p style={{ fontSize: "10px", color: "#374151", margin: 0 }}>
-                Score original: {result.originalScore} | Ajuste: {result.manualAdjustment.points > 0 ? "+" : ""}{result.manualAdjustment.points} pontos | Justificativa: {result.manualAdjustment.justification}
-              </p>
+              </div>
             </div>
-          )}
 
-          {/* RODAPÉ */}
-          <div style={{ marginTop: "24px", borderTop: "1px solid #d1d5db", paddingTop: "10px", textAlign: "center" }}>
-            <p style={{ fontSize: "8px", color: "#9ca3af", margin: 0 }}>
-              Este relatório constitui ferramenta auxiliar de análise. A decisão final sobre a concessão de crédito é de exclusiva responsabilidade do analista.
+            <p className="text-xs text-muted-foreground">
+              A decisão e o ajuste manual continuam aplicando ao titular. Score do fiador é
+              informativo.
             </p>
-            <p style={{ fontSize: "8px", color: "#9ca3af", marginTop: "2px" }}>
-              Analisador de Crédito - POSSIBLE &nbsp;|&nbsp; {fmtDate(result.data)}
-            </p>
-          </div>
+          </aside>
         </div>
 
         {/* Bottom actions */}

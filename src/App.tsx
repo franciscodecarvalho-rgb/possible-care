@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import AnalisePF from "./pages/AnalisePF";
 import AnalisePJ from "./pages/AnalisePJ";
+import AnaliseNova from "./pages/AnaliseNova";
+import FiadorNovo from "./pages/FiadorNovo";
 import Preview from "./pages/Preview";
 import Resultado from "./pages/Resultado";
 import Historico from "./pages/Historico";
@@ -28,6 +30,8 @@ const App = () => (
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
+          <Route path="/analise/nova" element={<AuthGuard><AnaliseNova /></AuthGuard>} />
+          <Route path="/analise/:analiseId/fiador/novo" element={<AuthGuard><FiadorNovo /></AuthGuard>} />
           <Route path="/analise/pf" element={<AuthGuard><AnalisePF /></AuthGuard>} />
           <Route path="/analise/pj" element={<AuthGuard><AnalisePJ /></AuthGuard>} />
           <Route path="/preview" element={<AuthGuard><Preview /></AuthGuard>} />

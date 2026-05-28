@@ -16,7 +16,7 @@ export interface CriterionConfig {
 
 export interface CustomCriterion extends CriterionConfig {
   calcType: "boolean" | "ranges";
-  applicableTo: ("pfIrpf" | "pfComprovantes" | "pj")[];
+  applicableTo: ("pfIrpf" | "pj")[];
   referenceField: string;
 }
 
@@ -37,11 +37,13 @@ export interface FinancialParams {
 export interface ScoringConfig {
   descricao?: string;
   pfIrpf: CriterionConfig[];
-  pfComprovantes: CriterionConfig[];
   pj: CriterionConfig[];
   decisionBands: DecisionBand[];
   financialParams: FinancialParams;
   customCriteria: CustomCriterion[];
+  corteFiadorPf: number;
+  corteFiadorPj: number;
+  validadeAnaliseDias: number;
 }
 
 const STORAGE_KEY = "scoring_config";
@@ -108,68 +110,6 @@ export const DEFAULT_CONFIG: ScoringConfig = {
       ranges: [
         { label: "Inconsistente", min: 0, max: 1, percentage: 0 },
         { label: "Coerente", min: 1, max: 2, percentage: 100 },
-      ],
-    },
-  ],
-  pfComprovantes: [
-    {
-      id: "pfc_comprometimento", name: "Comprometimento de Renda", maxPoints: 250,
-      ranges: [
-        { label: "Excelente", min: 0, max: 25, percentage: 100 },
-        { label: "Bom", min: 25, max: 35, percentage: 72 },
-        { label: "Regular", min: 35, max: 50, percentage: 36 },
-        { label: "Crítico", min: 50, max: 100, percentage: 0 },
-      ],
-    },
-    {
-      id: "pfc_estabilidade", name: "Estabilidade de Renda", maxPoints: 200,
-      ranges: [
-        { label: "Instável", min: 0, max: 1, percentage: 0 },
-        { label: "Razoável", min: 1, max: 2, percentage: 50 },
-        { label: "Estável", min: 2, max: 100, percentage: 100 },
-      ],
-    },
-    {
-      id: "pfc_patrimonio", name: "Patrimônio Declarado", maxPoints: 150,
-      ranges: [
-        { label: "Crítico", min: 0, max: 50, percentage: 7 },
-        { label: "Baixo", min: 50, max: 100, percentage: 33 },
-        { label: "Adequado", min: 100, max: 200, percentage: 67 },
-        { label: "Excelente", min: 200, max: 1000, percentage: 100 },
-      ],
-    },
-    {
-      id: "pfc_endividamento", name: "Endividamento", maxPoints: 150,
-      ranges: [
-        { label: "Sem dívidas", min: 0, max: 0.1, percentage: 100 },
-        { label: "Baixo", min: 0.1, max: 30, percentage: 67 },
-        { label: "Moderado", min: 30, max: 60, percentage: 33 },
-        { label: "Alto", min: 60, max: 100, percentage: 0 },
-      ],
-    },
-    {
-      id: "pfc_tempo_emprego", name: "Tempo de Emprego", maxPoints: 100,
-      ranges: [
-        { label: "<1 ano", min: 0, max: 1, percentage: 10 },
-        { label: "1-3 anos", min: 1, max: 3, percentage: 40 },
-        { label: "3-5 anos", min: 3, max: 5, percentage: 70 },
-        { label: ">5 anos", min: 5, max: 100, percentage: 100 },
-      ],
-    },
-    {
-      id: "pfc_bens_reais", name: "Posse de Bens Reais", maxPoints: 100,
-      ranges: [
-        { label: "Nenhum", min: 0, max: 1, percentage: 0 },
-        { label: "Veículo", min: 1, max: 2, percentage: 40 },
-        { label: "Imóvel", min: 2, max: 3, percentage: 60 },
-        { label: "Imóvel + Veículo", min: 3, max: 4, percentage: 100 },
-      ],
-    },
-    {
-      id: "pfc_referencias", name: "Referências Bancárias", maxPoints: 50,
-      ranges: [
-        { label: "Nenhuma", min: 0, max: 1, percentage: 0 },
-        { label: "Possui", min: 1, max: 2, percentage: 100 },
       ],
     },
   ],
@@ -269,6 +209,9 @@ export const DEFAULT_CONFIG: ScoringConfig = {
     percentualMinimoExtracoes: 50,
   },
   customCriteria: [],
+  corteFiadorPf: 600,
+  corteFiadorPj: 700,
+  validadeAnaliseDias: 90,
 };
 
 const mergeCriteria = (defaults: CriterionConfig[], saved?: CriterionConfig[]) => {
@@ -283,11 +226,18 @@ const normalizeConfig = (parsed: Partial<ScoringConfig>): ScoringConfig => ({
   ...DEFAULT_CONFIG,
   ...parsed,
   pfIrpf: mergeCriteria(DEFAULT_CONFIG.pfIrpf, parsed.pfIrpf),
-  pfComprovantes: mergeCriteria(DEFAULT_CONFIG.pfComprovantes, parsed.pfComprovantes),
   pj: mergeCriteria(DEFAULT_CONFIG.pj, parsed.pj),
   decisionBands: parsed.decisionBands || structuredClone(DEFAULT_CONFIG.decisionBands),
   financialParams: { ...DEFAULT_CONFIG.financialParams, ...(parsed.financialParams || {}) },
-  customCriteria: parsed.customCriteria || [],
+  customCriteria: (parsed.customCriteria || []).map((c) => ({
+    ...c,
+    applicableTo: (c.applicableTo as readonly string[]).filter(
+      (k) => k === "pfIrpf" || k === "pj",
+    ) as ("pfIrpf" | "pj")[],
+  })),
+  corteFiadorPf: typeof parsed.corteFiadorPf === "number" ? parsed.corteFiadorPf : DEFAULT_CONFIG.corteFiadorPf,
+  corteFiadorPj: typeof parsed.corteFiadorPj === "number" ? parsed.corteFiadorPj : DEFAULT_CONFIG.corteFiadorPj,
+  validadeAnaliseDias: typeof parsed.validadeAnaliseDias === "number" ? parsed.validadeAnaliseDias : DEFAULT_CONFIG.validadeAnaliseDias,
 });
 
 export function loadConfig(): ScoringConfig {

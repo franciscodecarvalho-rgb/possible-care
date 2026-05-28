@@ -48,7 +48,7 @@ function CriteriaEditor({
   onChange: (c: CriterionConfig[]) => void;
   customCriteria: CustomCriterion[];
   onChangeCustom: (c: CustomCriterion[]) => void;
-  tabKey: "pfIrpf" | "pfComprovantes" | "pj";
+  tabKey: "pfIrpf" | "pj";
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -275,7 +275,7 @@ function AddCustomDialog({
   const [name, setName] = useState("");
   const [maxPoints, setMaxPoints] = useState(50);
   const [calcType, setCalcType] = useState<"boolean" | "ranges">("boolean");
-  const [applicableTo, setApplicableTo] = useState<("pfIrpf" | "pfComprovantes" | "pj")[]>(["pfIrpf"]);
+  const [applicableTo, setApplicableTo] = useState<("pfIrpf" | "pj")[]>(["pfIrpf"]);
   const [referenceField, setReferenceField] = useState("");
 
   useEffect(() => {
@@ -302,7 +302,7 @@ function AddCustomDialog({
     onOpenChange(false);
   };
 
-  const toggleApplicable = (key: "pfIrpf" | "pfComprovantes" | "pj") => {
+  const toggleApplicable = (key: "pfIrpf" | "pj") => {
     setApplicableTo(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
 
@@ -333,11 +333,11 @@ function AddCustomDialog({
           <div>
             <label className="text-sm font-medium">Aplicável a</label>
             <div className="flex gap-3 mt-1">
-              {(["pfIrpf", "pfComprovantes", "pj"] as const).map(k => (
+              {(["pfIrpf", "pj"] as const).map(k => (
                 <label key={k} className="flex items-center gap-1 text-sm">
                   <input type="checkbox" checked={applicableTo.includes(k)}
                     onChange={() => toggleApplicable(k)} className="rounded" />
-                  {k === "pfIrpf" ? "PF IRPF" : k === "pfComprovantes" ? "PF Comprovantes" : "PJ"}
+                  {k === "pfIrpf" ? "PF IRPF" : "PJ"}
                 </label>
               ))}
             </div>
@@ -385,7 +385,6 @@ export default function Configuracoes() {
   const hasChanges = useMemo(() => JSON.stringify(config) !== savedConfig, [config, savedConfig]);
   const totals = useMemo(() => ({
     pfIrpf: config.pfIrpf.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pfIrpf")).reduce((s, c) => s + c.maxPoints, 0),
-    pfComprovantes: config.pfComprovantes.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pfComprovantes")).reduce((s, c) => s + c.maxPoints, 0),
     pj: config.pj.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pj")).reduce((s, c) => s + c.maxPoints, 0),
   }), [config]);
   const invalidTotals = Object.values(totals).some((total) => total !== 1000);
@@ -473,13 +472,12 @@ export default function Configuracoes() {
       <div className="container mx-auto max-w-5xl px-6 py-6 space-y-8">
         {/* SECTION 1 & 2: Criteria by tab */}
         <Tabs defaultValue="pfIrpf">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="pfIrpf">Pessoa Física (IRPF)</TabsTrigger>
-            <TabsTrigger value="pfComprovantes">Pessoa Física (Comprovantes)</TabsTrigger>
             <TabsTrigger value="pj">Pessoa Jurídica</TabsTrigger>
           </TabsList>
 
-          {(["pfIrpf", "pfComprovantes", "pj"] as const).map((tab) => (
+          {(["pfIrpf", "pj"] as const).map((tab) => (
             <TabsContent key={tab} value={tab} className="mt-4">
               <CriteriaEditor
                 criteria={config[tab]}
@@ -605,7 +603,7 @@ export default function Configuracoes() {
                   <span className="flex-1 text-sm">{cc.name}</span>
                   <span className="text-xs text-muted-foreground">
                     {cc.calcType === "boolean" ? "Sim/Não" : "Faixas"} · {cc.maxPoints} pts ·
-                    {cc.applicableTo.map(a => a === "pfIrpf" ? " PF IRPF" : a === "pfComprovantes" ? " PF Comp." : " PJ").join(",")}
+                    {cc.applicableTo.map(a => a === "pfIrpf" ? " PF IRPF" : " PJ").join(",")}
                   </span>
                   <Button variant="ghost" size="sm" title="Editar"
                     onClick={() => { setEditingCustom(cc); setAddCustomOpen(true); }}>

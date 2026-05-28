@@ -12,6 +12,7 @@ export interface ScoreBreakdown {
 }
 
 export interface ScoringResult {
+  id?: string;
   score: number;
   originalScore?: number;
   manualAdjustment?: { points: number; justification: string; adjustedAt: string };
@@ -25,6 +26,7 @@ export interface ScoringResult {
   pjDocType?: "balancos" | "faturamento";
   extractedData: Record<string, any>;
   formData: { valor: number; prazo: number; finalidade: string };
+  clienteId?: string | null;
 }
 
 const generateProtocolo = (): string => {

@@ -20,9 +20,14 @@ type AnaliseRow = {
   manual_adjustment: any | null;
   data: string;
   created_by?: string | null;
+  cliente_id?: string | null;
 };
 
-const toRow = (r: ScoringResult, userId: string | null): AnaliseRow => ({
+const toRow = (
+  r: ScoringResult,
+  userId: string | null,
+  clienteId: string | null = null,
+): AnaliseRow => ({
   protocolo: r.protocolo,
   tipo: r.tipo,
   pj_doc_type: r.pjDocType ?? null,
@@ -37,9 +42,11 @@ const toRow = (r: ScoringResult, userId: string | null): AnaliseRow => ({
   manual_adjustment: r.manualAdjustment ?? null,
   data: r.data,
   created_by: userId,
+  cliente_id: clienteId,
 });
 
 const fromRow = (row: any): ScoringResult => ({
+  id: row.id,
   protocolo: row.protocolo,
   tipo: row.tipo,
   pjDocType: row.pj_doc_type ?? undefined,
@@ -53,6 +60,7 @@ const fromRow = (row: any): ScoringResult => ({
   breakdown: row.breakdown ?? [],
   manualAdjustment: row.manual_adjustment ?? undefined,
   data: row.data,
+  clienteId: row.cliente_id ?? null,
 });
 
 const getUserId = async (): Promise<string | null> => {
@@ -72,15 +80,23 @@ export const loadHistory = async (): Promise<ScoringResult[]> => {
   return (data ?? []).map(fromRow);
 };
 
-export const saveHistoryResult = async (result: ScoringResult): Promise<void> => {
+export const saveHistoryResult = async (
+  result: ScoringResult,
+  clienteId: string | null = null,
+): Promise<{ id: string }> => {
   const userId = await getUserId();
   if (!userId) throw new Error("Usuário não autenticado");
-  const row = toRow(result, userId);
-  const { error } = await supabase.from("analises").insert(row);
+  const row = toRow(result, userId, clienteId ?? result.clienteId ?? null);
+  const { data, error } = await supabase
+    .from("analises")
+    .insert(row)
+    .select("id")
+    .single();
   if (error) {
     console.error("Erro ao salvar análise:", error);
     throw error;
   }
+  return { id: data.id as string };
 };
 
 export const updateHistoryResult = async (result: ScoringResult): Promise<void> => {

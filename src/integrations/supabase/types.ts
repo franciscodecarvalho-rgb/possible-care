@@ -85,6 +85,44 @@ export type Database = {
           },
         ]
       }
+      bureaus: {
+        Row: {
+          analise_id: string
+          bureau: string
+          created_at: string
+          created_by: string | null
+          dados_extraidos: Json
+          id: string
+          pdf_filename: string | null
+        }
+        Insert: {
+          analise_id: string
+          bureau: string
+          created_at?: string
+          created_by?: string | null
+          dados_extraidos: Json
+          id?: string
+          pdf_filename?: string | null
+        }
+        Update: {
+          analise_id?: string
+          bureau?: string
+          created_at?: string
+          created_by?: string | null
+          dados_extraidos?: Json
+          id?: string
+          pdf_filename?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bureaus_analise_id_fkey"
+            columns: ["analise_id"]
+            isOneToOne: false
+            referencedRelation: "analises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           created_at: string
@@ -165,6 +203,68 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      fiadores: {
+        Row: {
+          analise_id: string
+          breakdown: Json
+          created_at: string
+          created_by: string | null
+          decision: string
+          decision_color: string
+          documento: string
+          extracted_data: Json
+          id: string
+          insufficient_data: boolean
+          nome: string
+          pj_doc_type: string | null
+          score: number
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          analise_id: string
+          breakdown: Json
+          created_at?: string
+          created_by?: string | null
+          decision: string
+          decision_color: string
+          documento: string
+          extracted_data: Json
+          id?: string
+          insufficient_data?: boolean
+          nome: string
+          pj_doc_type?: string | null
+          score: number
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          analise_id?: string
+          breakdown?: Json
+          created_at?: string
+          created_by?: string | null
+          decision?: string
+          decision_color?: string
+          documento?: string
+          extracted_data?: Json
+          id?: string
+          insufficient_data?: boolean
+          nome?: string
+          pj_doc_type?: string | null
+          score?: number
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiadores_analise_id_fkey"
+            columns: ["analise_id"]
+            isOneToOne: false
+            referencedRelation: "analises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
