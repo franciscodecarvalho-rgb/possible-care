@@ -14,10 +14,12 @@ import {
 } from "lucide-react";
 import {
   ScoringConfig, CriterionConfig, CustomCriterion, DecisionBand,
-  DEFAULT_CONFIG, loadConfig, saveConfig, resetConfig, exportConfig, importConfig,
+  DEFAULT_CONFIG, exportConfig, importConfig,
   validateRanges, validateDecisionBands,
 } from "@/lib/scoringConfig";
+import { getScoringConfig, saveScoringConfig, migrateLocalConfigIfNeeded } from "@/lib/scoringConfigService";
 import BackButton from "@/components/BackButton";
+import { Loader2 } from "lucide-react";
 
 const CRITERION_HELP: Record<string, string> = {
   "Comprometimento de Renda": "Avalia quanto a parcela estimada consome da renda mensal identificada nos documentos.",
