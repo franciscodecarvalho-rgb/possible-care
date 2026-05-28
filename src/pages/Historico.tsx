@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import {
@@ -10,15 +10,12 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Inbox, Eye, Download, Trash2, Filter, GitCompare } from "lucide-react";
+import { Inbox, Eye, Download, Filter, GitCompare, Loader2 } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { toast } from "sonner";
 import type { ScoringResult } from "@/lib/creditScoring";
-import { loadHistory, persistHistory } from "@/lib/historyStorage";
+import { loadHistory } from "@/lib/historyService";
+import MigracaoLocalStorage from "@/components/MigracaoLocalStorage";
 
 const decisionOptions = [
   "CRÉDITO APROVADO",
@@ -39,40 +36,23 @@ const Historico = () => {
   const [filterDecisao, setFilterDecisao] = useState("todos");
   const [filterDe, setFilterDe] = useState("");
   const [filterAte, setFilterAte] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  // Delete dialog
-  const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
-
-  useEffect(() => {
-    setHistory(loadHistory());
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await loadHistory();
+      setHistory(data);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao carregar histórico.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    let list = [...history];
-    if (filterTipo !== "todos") list = list.filter((r) => r.tipo === filterTipo);
-    if (filterDecisao !== "todos") list = list.filter((r) => r.decision === filterDecisao);
-    if (filterDe) {
-      const de = new Date(filterDe);
-      list = list.filter((r) => new Date(r.data) >= de);
-    }
-    if (filterAte) {
-      const ate = new Date(filterAte);
-      ate.setHours(23, 59, 59);
-      list = list.filter((r) => new Date(r.data) <= ate);
-    }
-    setFilteredHistory(list);
-  }, [history, filterTipo, filterDecisao, filterDe, filterAte]);
-
-  const handleDelete = () => {
-    if (deleteIdx === null) return;
-    const item = filteredHistory[deleteIdx];
-    if (!item) return;
-    const newHistory = history.filter((r) => r.protocolo !== item.protocolo);
-    persistHistory(newHistory);
-    setHistory(newHistory);
-    setDeleteIdx(null);
-    toast.success("Análise excluída.");
-  };
+    reload();
+  }, [reload]);
 
   const handleView = (r: ScoringResult) => {
     navigate("/resultado", {
