@@ -14,6 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_keys: {
+        Row: {
+          ativa: boolean
+          criada_em: string
+          criada_por: string | null
+          id: string
+          key_hash: string
+          nome: string
+          prefixo: string
+          revogada_em: string | null
+          ultima_uso: string | null
+        }
+        Insert: {
+          ativa?: boolean
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          key_hash: string
+          nome: string
+          prefixo: string
+          revogada_em?: string | null
+          ultima_uso?: string | null
+        }
+        Update: {
+          ativa?: boolean
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          key_hash?: string
+          nome?: string
+          prefixo?: string
+          revogada_em?: string | null
+          ultima_uso?: string | null
+        }
+        Relationships: []
+      }
+      consultas_api: {
+        Row: {
+          analise_id: string | null
+          api_key_id: string | null
+          consultada_em: string
+          id: string
+          ip_origem: string | null
+          protocolo: string
+          resposta_json: Json | null
+          status_http: number
+        }
+        Insert: {
+          analise_id?: string | null
+          api_key_id?: string | null
+          consultada_em?: string
+          id?: string
+          ip_origem?: string | null
+          protocolo: string
+          resposta_json?: Json | null
+          status_http: number
+        }
+        Update: {
+          analise_id?: string | null
+          api_key_id?: string | null
+          consultada_em?: string
+          id?: string
+          ip_origem?: string | null
+          protocolo?: string
+          resposta_json?: Json | null
+          status_http?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultas_api_analise_id_fkey"
+            columns: ["analise_id"]
+            isOneToOne: false
+            referencedRelation: "analises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultas_api_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analises: {
         Row: {
           breakdown: Json

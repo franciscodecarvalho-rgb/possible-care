@@ -14,6 +14,7 @@ import Preview from "./pages/Preview";
 import Resultado from "./pages/Resultado";
 import Historico from "./pages/Historico";
 import Configuracoes from "./pages/Configuracoes";
+import ApiKeys from "./pages/ApiKeys";
 import Clientes from "./pages/Clientes";
 import ClienteFormulario from "./pages/ClienteFormulario";
 import ClienteFicha from "./pages/ClienteFicha";
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/resultado" element={<AuthGuard><Resultado /></AuthGuard>} />
           <Route path="/historico" element={<AuthGuard><Historico /></AuthGuard>} />
           <Route path="/configuracoes" element={<AuthGuard><Configuracoes /></AuthGuard>} />
+          <Route path="/api-keys" element={<AuthGuard><ApiKeys /></AuthGuard>} />
           <Route path="/clientes" element={<AuthGuard><Clientes /></AuthGuard>} />
           <Route path="/clientes/novo" element={<AuthGuard><ClienteFormulario /></AuthGuard>} />
           <Route path="/clientes/:id" element={<AuthGuard><ClienteFicha /></AuthGuard>} />
