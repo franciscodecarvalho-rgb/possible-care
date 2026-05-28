@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import {
@@ -10,15 +10,12 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Inbox, Eye, Download, Trash2, Filter, GitCompare } from "lucide-react";
+import { Inbox, Eye, Download, Filter, GitCompare, Loader2 } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { toast } from "sonner";
 import type { ScoringResult } from "@/lib/creditScoring";
-import { loadHistory, persistHistory } from "@/lib/historyStorage";
+import { loadHistory } from "@/lib/historyService";
+import MigracaoLocalStorage from "@/components/MigracaoLocalStorage";
 
 const decisionOptions = [
   "CRÉDITO APROVADO",
@@ -39,13 +36,23 @@ const Historico = () => {
   const [filterDecisao, setFilterDecisao] = useState("todos");
   const [filterDe, setFilterDe] = useState("");
   const [filterAte, setFilterAte] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  // Delete dialog
-  const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await loadHistory();
+      setHistory(data);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao carregar histórico.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setHistory(loadHistory());
-  }, []);
+    reload();
+  }, [reload]);
 
   useEffect(() => {
     let list = [...history];
@@ -62,17 +69,6 @@ const Historico = () => {
     }
     setFilteredHistory(list);
   }, [history, filterTipo, filterDecisao, filterDe, filterAte]);
-
-  const handleDelete = () => {
-    if (deleteIdx === null) return;
-    const item = filteredHistory[deleteIdx];
-    if (!item) return;
-    const newHistory = history.filter((r) => r.protocolo !== item.protocolo);
-    persistHistory(newHistory);
-    setHistory(newHistory);
-    setDeleteIdx(null);
-    toast.success("Análise excluída.");
-  };
 
   const handleView = (r: ScoringResult) => {
     navigate("/resultado", {
@@ -129,6 +125,8 @@ const Historico = () => {
         <p className="mt-1 text-sm text-muted-foreground">
           Consulte as análises de crédito realizadas
         </p>
+
+        <MigracaoLocalStorage onMigrated={reload} />
 
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
@@ -285,10 +283,6 @@ const Historico = () => {
                           <Button variant="ghost" size="sm" onClick={() => handleExportPDF(r)} title="Exportar PDF">
                             <Download className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setDeleteIdx(i)} title="Excluir"
-                            className="text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -300,27 +294,13 @@ const Historico = () => {
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground text-right">
-          {filteredHistory.length} de {history.length} análise(s)
+          {loading ? (
+            <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Carregando...</span>
+          ) : (
+            <>{filteredHistory.length} de {history.length} análise(s)</>
+          )}
         </p>
       </main>
-
-      {/* Delete confirmation */}
-      <AlertDialog open={deleteIdx !== null} onOpenChange={(open) => !open && setDeleteIdx(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir análise?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O relatório será removido permanentemente do histórico.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
