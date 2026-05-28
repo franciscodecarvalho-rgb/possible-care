@@ -12,6 +12,9 @@ import Preview from "./pages/Preview";
 import Resultado from "./pages/Resultado";
 import Historico from "./pages/Historico";
 import Configuracoes from "./pages/Configuracoes";
+import Clientes from "./pages/Clientes";
+import ClienteFormulario from "./pages/ClienteFormulario";
+import ClienteFicha from "./pages/ClienteFicha";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +34,10 @@ const App = () => (
           <Route path="/resultado" element={<AuthGuard><Resultado /></AuthGuard>} />
           <Route path="/historico" element={<AuthGuard><Historico /></AuthGuard>} />
           <Route path="/configuracoes" element={<AuthGuard><Configuracoes /></AuthGuard>} />
+          <Route path="/clientes" element={<AuthGuard><Clientes /></AuthGuard>} />
+          <Route path="/clientes/novo" element={<AuthGuard><ClienteFormulario /></AuthGuard>} />
+          <Route path="/clientes/:id" element={<AuthGuard><ClienteFicha /></AuthGuard>} />
+          <Route path="/clientes/:id/editar" element={<AuthGuard><ClienteFormulario /></AuthGuard>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -17,6 +17,7 @@ export type Database = {
       analises: {
         Row: {
           breakdown: Json
+          cliente_id: string | null
           created_at: string
           created_by: string | null
           data: string
@@ -36,6 +37,7 @@ export type Database = {
         }
         Insert: {
           breakdown: Json
+          cliente_id?: string | null
           created_at?: string
           created_by?: string | null
           data?: string
@@ -55,6 +57,7 @@ export type Database = {
         }
         Update: {
           breakdown?: Json
+          cliente_id?: string | null
           created_at?: string
           created_by?: string | null
           data?: string
@@ -69,6 +72,95 @@ export type Database = {
           protocolo?: string
           score?: number
           score_original?: number | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analises_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clientes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_fundacao: string | null
+          data_nascimento: string | null
+          documento: string
+          email: string | null
+          endereco_bairro: string | null
+          endereco_cep: string | null
+          endereco_cidade: string | null
+          endereco_complemento: string | null
+          endereco_numero: string | null
+          endereco_rua: string | null
+          endereco_uf: string | null
+          id: string
+          nome: string
+          nome_fantasia: string | null
+          observacoes: string | null
+          ocupacao: string | null
+          porte: string | null
+          rg: string | null
+          status: string
+          telefone: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_fundacao?: string | null
+          data_nascimento?: string | null
+          documento: string
+          email?: string | null
+          endereco_bairro?: string | null
+          endereco_cep?: string | null
+          endereco_cidade?: string | null
+          endereco_complemento?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
+          endereco_uf?: string | null
+          id?: string
+          nome: string
+          nome_fantasia?: string | null
+          observacoes?: string | null
+          ocupacao?: string | null
+          porte?: string | null
+          rg?: string | null
+          status?: string
+          telefone?: string | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_fundacao?: string | null
+          data_nascimento?: string | null
+          documento?: string
+          email?: string | null
+          endereco_bairro?: string | null
+          endereco_cep?: string | null
+          endereco_cidade?: string | null
+          endereco_complemento?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
+          endereco_uf?: string | null
+          id?: string
+          nome?: string
+          nome_fantasia?: string | null
+          observacoes?: string | null
+          ocupacao?: string | null
+          porte?: string | null
+          rg?: string | null
+          status?: string
+          telefone?: string | null
           tipo?: string
           updated_at?: string
         }
