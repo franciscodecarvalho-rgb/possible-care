@@ -302,7 +302,5 @@ const Historico = () => {
     </div>
   );
 };
-  );
-};
 
 export default Historico;
