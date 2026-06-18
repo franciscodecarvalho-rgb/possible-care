@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import AuthGuard from "./components/AuthGuard";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import AnalisePF from "./pages/AnalisePF";
 import AnalisePJ from "./pages/AnalisePJ";
 import Preview from "./pages/Preview";
@@ -27,6 +28,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
           <Route path="/analise/pf" element={<AuthGuard><AnalisePF /></AuthGuard>} />
           <Route path="/analise/pj" element={<AuthGuard><AnalisePJ /></AuthGuard>} />
