@@ -27,13 +27,20 @@ export type Database = {
           form_data: Json
           id: string
           insufficient_data: boolean
+          justificativa_ajuste: string | null
+          limite_ajustado_manualmente: boolean | null
+          limite_aprovado: number | null
+          limite_sugerido: number | null
           manual_adjustment: Json | null
+          parcelas_aprovadas: number | null
+          parcelas_sugeridas: number | null
           pj_doc_type: string | null
           protocolo: string
           score: number
           score_original: number | null
           tipo: string
           updated_at: string
+          validade_analise: string | null
         }
         Insert: {
           breakdown: Json
@@ -47,13 +54,20 @@ export type Database = {
           form_data: Json
           id?: string
           insufficient_data?: boolean
+          justificativa_ajuste?: string | null
+          limite_ajustado_manualmente?: boolean | null
+          limite_aprovado?: number | null
+          limite_sugerido?: number | null
           manual_adjustment?: Json | null
+          parcelas_aprovadas?: number | null
+          parcelas_sugeridas?: number | null
           pj_doc_type?: string | null
           protocolo: string
           score: number
           score_original?: number | null
           tipo: string
           updated_at?: string
+          validade_analise?: string | null
         }
         Update: {
           breakdown?: Json
@@ -67,13 +81,20 @@ export type Database = {
           form_data?: Json
           id?: string
           insufficient_data?: boolean
+          justificativa_ajuste?: string | null
+          limite_ajustado_manualmente?: boolean | null
+          limite_aprovado?: number | null
+          limite_sugerido?: number | null
           manual_adjustment?: Json | null
+          parcelas_aprovadas?: number | null
+          parcelas_sugeridas?: number | null
           pj_doc_type?: string | null
           protocolo?: string
           score?: number
           score_original?: number | null
           tipo?: string
           updated_at?: string
+          validade_analise?: string | null
         }
         Relationships: [
           {
@@ -81,6 +102,80 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_keys: {
+        Row: {
+          ativa: boolean
+          criada_em: string
+          criada_por: string | null
+          id: string
+          key_hash: string
+          nome: string
+          prefixo: string
+          revogada_em: string | null
+          ultima_uso: string | null
+        }
+        Insert: {
+          ativa?: boolean
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          key_hash: string
+          nome: string
+          prefixo: string
+          revogada_em?: string | null
+          ultima_uso?: string | null
+        }
+        Update: {
+          ativa?: boolean
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          key_hash?: string
+          nome?: string
+          prefixo?: string
+          revogada_em?: string | null
+          ultima_uso?: string | null
+        }
+        Relationships: []
+      }
+      bureaus: {
+        Row: {
+          analise_id: string
+          bureau: string
+          created_at: string
+          created_by: string | null
+          dados_extraidos: Json
+          id: string
+          pdf_filename: string | null
+        }
+        Insert: {
+          analise_id: string
+          bureau: string
+          created_at?: string
+          created_by?: string | null
+          dados_extraidos: Json
+          id?: string
+          pdf_filename?: string | null
+        }
+        Update: {
+          analise_id?: string
+          bureau?: string
+          created_at?: string
+          created_by?: string | null
+          dados_extraidos?: Json
+          id?: string
+          pdf_filename?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bureaus_analise_id_fkey"
+            columns: ["analise_id"]
+            isOneToOne: false
+            referencedRelation: "analises"
             referencedColumns: ["id"]
           },
         ]
@@ -166,6 +261,81 @@ export type Database = {
         }
         Relationships: []
       }
+      consultas_api: {
+        Row: {
+          analise_id: string | null
+          api_key_id: string | null
+          consultada_em: string
+          id: string
+          ip_origem: string | null
+          protocolo: string
+          resposta_json: Json | null
+          status_http: number
+        }
+        Insert: {
+          analise_id?: string | null
+          api_key_id?: string | null
+          consultada_em?: string
+          id?: string
+          ip_origem?: string | null
+          protocolo: string
+          resposta_json?: Json | null
+          status_http: number
+        }
+        Update: {
+          analise_id?: string | null
+          api_key_id?: string | null
+          consultada_em?: string
+          id?: string
+          ip_origem?: string | null
+          protocolo?: string
+          resposta_json?: Json | null
+          status_http?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultas_api_analise_id_fkey"
+            columns: ["analise_id"]
+            isOneToOne: false
+            referencedRelation: "analises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultas_api_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      politicas_credito: {
+        Row: {
+          ativa: boolean
+          conteudo: string
+          criada_em: string
+          criada_por: string | null
+          id: string
+          versao: number
+        }
+        Insert: {
+          ativa?: boolean
+          conteudo: string
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          versao: number
+        }
+        Update: {
+          ativa?: boolean
+          conteudo?: string
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          versao?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -210,6 +380,44 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      sugestoes_config: {
+        Row: {
+          criada_em: string
+          id: string
+          politica_id: string | null
+          resolvida_em: string | null
+          resolvida_por: string | null
+          status: string
+          sugestoes: Json
+        }
+        Insert: {
+          criada_em?: string
+          id?: string
+          politica_id?: string | null
+          resolvida_em?: string | null
+          resolvida_por?: string | null
+          status?: string
+          sugestoes: Json
+        }
+        Update: {
+          criada_em?: string
+          id?: string
+          politica_id?: string | null
+          resolvida_em?: string | null
+          resolvida_por?: string | null
+          status?: string
+          sugestoes?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sugestoes_config_politica_id_fkey"
+            columns: ["politica_id"]
+            isOneToOne: false
+            referencedRelation: "politicas_credito"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
