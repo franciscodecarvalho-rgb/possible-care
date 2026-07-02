@@ -185,10 +185,35 @@ export const maskTelefone = (v: string) => {
   return d.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d{1,4})$/, "$1-$2");
 };
 
-export const validarDocumento = (doc: string, tipo: TipoCliente) => {
-  const len = onlyDigits(doc).length;
-  return tipo === "pf" ? len === 11 : len === 14;
+const validaCPF = (cpf: string): boolean => {
+  const d = onlyDigits(cpf);
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  for (const pos of [9, 10]) {
+    let soma = 0;
+    for (let i = 0; i < pos; i++) soma += parseInt(d[i]) * (pos + 1 - i);
+    const dv = ((soma * 10) % 11) % 10;
+    if (dv !== parseInt(d[pos])) return false;
+  }
+  return true;
 };
+
+const validaCNPJ = (cnpj: string): boolean => {
+  const d = onlyDigits(cnpj);
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const calc = (len: number): number => {
+    const pesos = len === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let soma = 0;
+    for (let i = 0; i < len; i++) soma += parseInt(d[i]) * pesos[i];
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  return calc(12) === parseInt(d[12]) && calc(13) === parseInt(d[13]);
+};
+
+export const validarDocumento = (doc: string, tipo: TipoCliente) =>
+  tipo === "pf" ? validaCPF(doc) : validaCNPJ(doc);
 
 export const UFS = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",

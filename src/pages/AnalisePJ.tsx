@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import FileDropzone from "@/components/FileDropzone";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,12 @@ import { loadConfig } from "@/lib/scoringConfig";
 
 const AnalisePJ = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Cliente do CRM (quando a análise parte da ficha do cliente)
+  const cliente = location.state?.cliente as { id: string; nome: string; documento: string } | undefined;
   const defaultPrazo = String(loadConfig().financialParams.prazoPadrao || 24);
-  const [nome, setNome] = useState("");
-  const [documento, setDocumento] = useState("");
+  const [nome, setNome] = useState(cliente?.nome ?? "");
+  const [documento, setDocumento] = useState(cliente?.documento ?? "");
   const [valor, setValor] = useState("");
   const [prazo, setPrazo] = useState(defaultPrazo);
   const [uploadOption, setUploadOption] = useState<"balancos" | "faturamento">("balancos");
@@ -74,6 +77,7 @@ const AnalisePJ = () => {
         state: {
           extractedData,
           tipo: "pj",
+          clienteId: cliente?.id ?? null,
           formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade: "" },
         },
       });
@@ -90,11 +94,16 @@ const AnalisePJ = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto max-w-2xl px-6 py-10">
-        <BackButton to="/" />
+        <BackButton to={cliente ? `/clientes/${cliente.id}` : "/"} />
         <h1 className="text-2xl font-bold text-foreground">Análise — Pessoa Jurídica</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Preencha os dados e envie os documentos necessários
         </p>
+        {cliente && (
+          <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+            Análise vinculada ao cliente <span className="font-semibold text-foreground">{cliente.nome}</span> — ficará visível na ficha do CRM.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div className="space-y-2">

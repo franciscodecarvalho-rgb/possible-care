@@ -68,7 +68,7 @@ const ClienteFormulario = () => {
     if (!form.nome.trim()) return toast.error("Nome é obrigatório");
     if (!form.documento.trim()) return toast.error("Documento é obrigatório");
     if (!validarDocumento(form.documento, form.tipo))
-      return toast.error(form.tipo === "pf" ? "CPF deve ter 11 dígitos" : "CNPJ deve ter 14 dígitos");
+      return toast.error(form.tipo === "pf" ? "CPF inválido — confira os dígitos" : "CNPJ inválido — confira os dígitos");
     if (form.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email))
       return toast.error("Email inválido");
 

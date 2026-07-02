@@ -80,7 +80,13 @@ const ClienteFicha = () => {
             <Button variant="outline" onClick={() => navigate(`/clientes/${cliente.id}/editar`)}>
               <Pencil className="h-4 w-4" /> Editar cliente
             </Button>
-            <Button onClick={() => navigate(cliente.tipo === "pf" ? "/analise/pf" : "/analise/pj")}>
+            <Button
+              onClick={() =>
+                navigate(cliente.tipo === "pf" ? "/analise/pf" : "/analise/pj", {
+                  state: { cliente: { id: cliente.id, nome: cliente.nome, documento: cliente.documento } },
+                })
+              }
+            >
               <FileSearch className="h-4 w-4" /> Nova análise
             </Button>
           </div>
@@ -163,17 +169,21 @@ const ClienteFicha = () => {
                           tipo: a.tipo,
                           formData: a.form_data,
                           fromHistory: {
+                            id: a.id,
+                            clienteId: a.cliente_id ?? null,
                             protocolo: a.protocolo,
                             score: a.score,
                             decision: a.decision,
                             decisionColor: a.decision_color,
+                            insufficientData: a.insufficient_data,
+                            pjDocType: a.pj_doc_type ?? undefined,
                             breakdown: a.breakdown,
                             data: a.data,
                             tipo: a.tipo,
                             extractedData: a.extracted_data,
                             formData: a.form_data,
                             manualAdjustment: a.manual_adjustment,
-                            scoreOriginal: a.score_original,
+                            originalScore: a.score_original ?? undefined,
                           },
                         },
                       })

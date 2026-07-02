@@ -1,43 +1,40 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import FileDropzone from "@/components/FileDropzone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { extractFromFiles } from "@/lib/extractionService";
-import { IRPF_PROMPT, COMPROVANTE_PROMPT } from "@/lib/pdfExtractor";
+import { IRPF_PROMPT } from "@/lib/pdfExtractor";
 import { loadConfig } from "@/lib/scoringConfig";
 
 const AnalisePF = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Cliente do CRM (quando a análise parte da ficha do cliente)
+  const cliente = location.state?.cliente as { id: string; nome: string; documento: string } | undefined;
   const defaultPrazo = String(loadConfig().financialParams.prazoPadrao || 24);
-  const [nome, setNome] = useState("");
-  const [documento, setDocumento] = useState("");
+  const [nome, setNome] = useState(cliente?.nome ?? "");
+  const [documento, setDocumento] = useState(cliente?.documento ?? "");
   const [valor, setValor] = useState("");
   const [prazo, setPrazo] = useState(defaultPrazo);
-  const [uploadOption, setUploadOption] = useState<"irpf" | "comprovantes">("irpf");
   const [irpfFiles, setIrpfFiles] = useState<File[]>([]);
-  const [comprovanteFiles, setComprovanteFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [progressMsg, setProgressMsg] = useState("");
 
   const validate = () => {
     const e: Record<string, string> = {};
-    const v = parseFloat(valor.replace(/\D/g, ""));
+    const v = parseFloat(valor);
     if (!nome.trim()) e.nome = "Informe o nome completo.";
     if (!documento.trim()) e.documento = "Informe o CPF.";
     if (!valor || isNaN(v) || v <= 0) e.valor = "Informe um valor maior que zero.";
     if (!prazo || parseInt(prazo) <= 0) e.prazo = "Informe um prazo válido.";
-    if (uploadOption === "irpf" && irpfFiles.length === 0)
-      e.irpf = "Envie a declaração IRPF.";
-    if (uploadOption === "comprovantes" && comprovanteFiles.length === 0)
-      e.comprovantes = "Envie pelo menos 1 comprovante de rendimento.";
+    if (irpfFiles.length === 0) e.irpf = "Envie a declaração IRPF.";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -51,10 +48,7 @@ const AnalisePF = () => {
 
     setLoading(true);
     try {
-      const files = uploadOption === "irpf" ? irpfFiles : comprovanteFiles;
-      const prompt = uploadOption === "irpf" ? IRPF_PROMPT : COMPROVANTE_PROMPT;
-
-      const extracted = await extractFromFiles(files, prompt, setProgressMsg);
+      const extracted = await extractFromFiles(irpfFiles, IRPF_PROMPT, setProgressMsg);
       const identifiedData = {
         ...extracted,
         nome_completo: nome.trim(),
@@ -65,6 +59,7 @@ const AnalisePF = () => {
         state: {
           extractedData: identifiedData,
           tipo: "pf",
+          clienteId: cliente?.id ?? null,
           formData: { valor: parseFloat(valor), prazo: parseInt(prazo), finalidade: "" },
         },
       });
@@ -81,15 +76,20 @@ const AnalisePF = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto max-w-2xl px-6 py-10">
-        <BackButton to="/" />
+        <BackButton to={cliente ? `/clientes/${cliente.id}` : "/"} />
         <h1 className="text-2xl font-bold text-foreground">Análise — Pessoa Física</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Preencha os dados e envie os documentos necessários
+          Preencha os dados e envie a Declaração IRPF completa
         </p>
+        {cliente && (
+          <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+            Análise vinculada ao cliente <span className="font-semibold text-foreground">{cliente.nome}</span> — ficará visível na ficha do CRM.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="nome">Nome completo / Razão Social</Label>
+            <Label htmlFor="nome">Nome completo</Label>
             <Input
               id="nome"
               type="text"
@@ -103,7 +103,7 @@ const AnalisePF = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="documento">CPF / CNPJ</Label>
+            <Label htmlFor="documento">CPF</Label>
             <Input
               id="documento"
               type="text"
@@ -147,44 +147,14 @@ const AnalisePF = () => {
           </div>
 
           <div className="space-y-4 rounded-lg border bg-card p-5">
-            <Label>Documentos de comprovação</Label>
-            <RadioGroup
-              value={uploadOption}
-              onValueChange={(v) => setUploadOption(v as "irpf" | "comprovantes")}
-              className="flex gap-6"
-              disabled={loading}
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="irpf" id="opt-irpf" />
-                <Label htmlFor="opt-irpf" className="cursor-pointer font-normal">
-                  Declaração IRPF completa
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="comprovantes" id="opt-comp" />
-                <Label htmlFor="opt-comp" className="cursor-pointer font-normal">
-                  Comprovantes de rendimento
-                </Label>
-              </div>
-            </RadioGroup>
-
-            {uploadOption === "irpf" ? (
-              <FileDropzone
-                label="Upload da Declaração IRPF (1 PDF)"
-                maxFiles={1}
-                files={irpfFiles}
-                onFilesChange={setIrpfFiles}
-                error={errors.irpf}
-              />
-            ) : (
-              <FileDropzone
-                label="Upload dos comprovantes de rendimento (até 3 PDFs)"
-                maxFiles={3}
-                files={comprovanteFiles}
-                onFilesChange={setComprovanteFiles}
-                error={errors.comprovantes}
-              />
-            )}
+            <Label>Documento de comprovação</Label>
+            <FileDropzone
+              label="Upload da Declaração IRPF (1 PDF)"
+              maxFiles={1}
+              files={irpfFiles}
+              onFilesChange={setIrpfFiles}
+              error={errors.irpf}
+            />
           </div>
 
           <Button

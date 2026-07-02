@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -13,7 +12,7 @@ import {
   ChevronDown, ChevronRight, Plus, Trash2, Download, Upload, RotateCcw, Save, AlertTriangle, HelpCircle, Pencil,
 } from "lucide-react";
 import {
-  ScoringConfig, CriterionConfig, CustomCriterion, DecisionBand,
+  ScoringConfig, CriterionConfig, CustomCriterion,
   DEFAULT_CONFIG, exportConfig, importConfig,
   validateRanges, validateDecisionBands,
 } from "@/lib/scoringConfig";
@@ -22,13 +21,13 @@ import BackButton from "@/components/BackButton";
 import { Loader2 } from "lucide-react";
 
 const CRITERION_HELP: Record<string, string> = {
-  "Comprometimento de Renda": "Avalia quanto a parcela estimada consome da renda mensal identificada nos documentos.",
+  "Comprometimento de Renda": "Avalia quanto a parcela estimada consome da renda mensal identificada nos documentos. Zera acima de 45% (regra prudencial).",
   "Evolução Patrimonial": "Compara a variação do patrimônio declarado com a renda anual informada.",
   "Patrimônio vs Renda": "Mede a relação entre bens declarados e renda anual para avaliar lastro financeiro.",
-  "Endividamento": "Analisa dívidas em relação ao patrimônio ou ativos disponíveis.",
+  "Endividamento": "Analisa dívidas em relação ao patrimônio ou ativos disponíveis. Na PJ, zera acima de 70% do ativo total.",
   "Estabilidade de Renda": "Verifica quantidade e qualidade das fontes de renda extraídas.",
   "Posse de Bens Reais": "Pontua a presença de bens como imóvel e veículo nos documentos.",
-  "Coerência Tributária": "Confere se imposto, alíquota e renda declarada são consistentes.",
+  "Coerência Tributária": "Confere se imposto, alíquota e renda declarada são consistentes. Isento legítimo (alíquota e imposto zerados) é considerado coerente.",
   "Liquidez Corrente": "Calcula ativo circulante dividido pelo passivo circulante nos balanços.",
   "Evolução Faturamento": "Compara o faturamento recente com períodos anteriores para medir crescimento.",
   "Margem de Lucro": "Calcula lucro líquido sobre receita para avaliar rentabilidade.",
@@ -41,19 +40,16 @@ const CRITERION_HELP: Record<string, string> = {
 
 // ─── Criteria Editor (weights + expandable ranges) ──────
 function CriteriaEditor({
-  criteria, onChange, customCriteria, onChangeCustom,
-  tabKey,
+  criteria, onChange,
 }: {
   criteria: CriterionConfig[];
   onChange: (c: CriterionConfig[]) => void;
-  customCriteria: CustomCriterion[];
-  onChangeCustom: (c: CustomCriterion[]) => void;
-  tabKey: "pfIrpf" | "pfComprovantes" | "pj";
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const total = criteria.reduce((s, c) => s + c.maxPoints, 0)
-    + customCriteria.filter(cc => cc.applicableTo.includes(tabKey)).reduce((s, c) => s + c.maxPoints, 0);
+  // Só critérios padrão entram na soma: customizados não são calculados pelo
+  // motor e, se contassem aqui, reduziriam o teto real do score.
+  const total = criteria.reduce((s, c) => s + c.maxPoints, 0);
 
   const toggleExpand = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
@@ -71,11 +67,11 @@ function CriteriaEditor({
     onChange(next);
   };
 
-  const applicableCustom = customCriteria.filter(cc => cc.applicableTo.includes(tabKey));
-
   return (
     <div className="space-y-3">
-      {/* Standard criteria */}
+      <p className="text-xs text-muted-foreground">
+        Pesos e faixas abaixo são aplicados diretamente no cálculo do score. Alterações valem para novas análises após salvar.
+      </p>
       {criteria.map((c, ci) => {
         const isOpen = expanded[c.id];
         const rangeError = validateRanges(c.ranges);
@@ -152,106 +148,6 @@ function CriteriaEditor({
         );
       })}
 
-      {/* Custom criteria applicable to this tab */}
-      {applicableCustom.map((cc) => {
-        const isOpen = expanded[cc.id];
-        return (
-          <div key={cc.id} className="rounded-lg border border-dashed border-primary/40 bg-card">
-            <div className="flex items-center gap-3 px-4 py-3">
-              <Badge variant="outline" className="text-xs">Custom</Badge>
-              <span className="flex flex-1 items-center gap-2 text-sm font-medium text-foreground">
-                {cc.name}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <HelpCircle className="h-4 w-4 cursor-help text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      Critério customizado calculado a partir do campo: {cc.referenceField || "referência não definida"}.
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </span>
-              <Input
-                type="number" min={0} max={1000} className="w-24 text-center"
-                value={cc.maxPoints}
-                onChange={(e) => {
-                  const next = customCriteria.map(c => c.id === cc.id ? { ...c, maxPoints: parseInt(e.target.value) || 0 } : c);
-                  onChangeCustom(next);
-                }}
-              />
-              <Button variant="ghost" size="sm" onClick={() => toggleExpand(cc.id)}>
-                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </Button>
-              <Button variant="ghost" size="sm" className="text-destructive"
-                onClick={() => onChangeCustom(customCriteria.filter(c => c.id !== cc.id))}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-            {isOpen && cc.calcType === "ranges" && (
-              <div className="border-t border-border bg-muted/30 px-4 py-3">
-                <table className="w-full text-xs">
-                  <thead><tr className="text-muted-foreground">
-                    <th className="text-left pb-2">Faixa</th><th className="text-center pb-2">De</th>
-                    <th className="text-center pb-2">Até</th><th className="text-center pb-2">% do peso</th>
-                    <th className="text-center pb-2">Pontos</th>
-                  </tr></thead>
-                  <tbody>
-                    {cc.ranges.map((r, ri) => (
-                      <tr key={ri} className="border-t border-border/50">
-                        <td className="py-2">{r.label}</td>
-                        <td className="py-2 text-center">
-                          <Input type="number" className="w-16 text-center text-xs mx-auto" value={r.min}
-                            onChange={(e) => {
-                              const next = customCriteria.map(c => {
-                                if (c.id !== cc.id) return c;
-                                const ranges = [...c.ranges];
-                                ranges[ri] = { ...ranges[ri], min: parseFloat(e.target.value) || 0 };
-                                return { ...c, ranges };
-                              });
-                              onChangeCustom(next);
-                            }} />
-                        </td>
-                        <td className="py-2 text-center">
-                          <Input type="number" className="w-16 text-center text-xs mx-auto" value={r.max}
-                            onChange={(e) => {
-                              const next = customCriteria.map(c => {
-                                if (c.id !== cc.id) return c;
-                                const ranges = [...c.ranges];
-                                ranges[ri] = { ...ranges[ri], max: parseFloat(e.target.value) || 0 };
-                                return { ...c, ranges };
-                              });
-                              onChangeCustom(next);
-                            }} />
-                        </td>
-                        <td className="py-2 text-center">
-                          <Input type="number" min={0} max={100} className="w-16 text-center text-xs mx-auto" value={r.percentage}
-                            onChange={(e) => {
-                              const next = customCriteria.map(c => {
-                                if (c.id !== cc.id) return c;
-                                const ranges = [...c.ranges];
-                                ranges[ri] = { ...ranges[ri], percentage: parseInt(e.target.value) || 0 };
-                                return { ...c, ranges };
-                              });
-                              onChangeCustom(next);
-                            }} />
-                        </td>
-                        <td className="py-2 text-center font-medium">{Math.round(cc.maxPoints * r.percentage / 100)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {isOpen && cc.calcType === "boolean" && (
-              <div className="border-t border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-                Sim = {cc.maxPoints} pts | Não = 0 pts
-              </div>
-            )}
-          </div>
-        );
-      })}
-
       {/* Total */}
       <div className={`flex items-center justify-between rounded-lg px-4 py-3 font-semibold ${total === 1000 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
         <span>TOTAL</span>
@@ -275,7 +171,7 @@ function AddCustomDialog({
   const [name, setName] = useState("");
   const [maxPoints, setMaxPoints] = useState(50);
   const [calcType, setCalcType] = useState<"boolean" | "ranges">("boolean");
-  const [applicableTo, setApplicableTo] = useState<("pfIrpf" | "pfComprovantes" | "pj")[]>(["pfIrpf"]);
+  const [applicableTo, setApplicableTo] = useState<("pfIrpf" | "pj")[]>(["pfIrpf"]);
   const [referenceField, setReferenceField] = useState("");
 
   useEffect(() => {
@@ -302,7 +198,7 @@ function AddCustomDialog({
     onOpenChange(false);
   };
 
-  const toggleApplicable = (key: "pfIrpf" | "pfComprovantes" | "pj") => {
+  const toggleApplicable = (key: "pfIrpf" | "pj") => {
     setApplicableTo(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
 
@@ -311,7 +207,9 @@ function AddCustomDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{editCriterion ? "Editar Critério Customizado" : "Adicionar Critério Customizado"}</DialogTitle>
-          <DialogDescription>Critérios customizados dependem de dados que a IA consiga extrair dos documentos.</DialogDescription>
+          <DialogDescription>
+            Critérios customizados são registrados como anotação da política, mas AINDA NÃO são aplicados no cálculo do score.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -333,11 +231,11 @@ function AddCustomDialog({
           <div>
             <label className="text-sm font-medium">Aplicável a</label>
             <div className="flex gap-3 mt-1">
-              {(["pfIrpf", "pfComprovantes", "pj"] as const).map(k => (
+              {(["pfIrpf", "pj"] as const).map(k => (
                 <label key={k} className="flex items-center gap-1 text-sm">
                   <input type="checkbox" checked={applicableTo.includes(k)}
                     onChange={() => toggleApplicable(k)} className="rounded" />
-                  {k === "pfIrpf" ? "PF IRPF" : k === "pfComprovantes" ? "PF Comprovantes" : "PJ"}
+                  {k === "pfIrpf" ? "PF IRPF" : "PJ"}
                 </label>
               ))}
             </div>
@@ -383,10 +281,10 @@ export default function Configuracoes() {
   }, []);
 
   const hasChanges = useMemo(() => JSON.stringify(config) !== savedConfig, [config, savedConfig]);
+  // Critérios customizados ficam FORA da soma: o motor não os pontua.
   const totals = useMemo(() => ({
-    pfIrpf: config.pfIrpf.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pfIrpf")).reduce((s, c) => s + c.maxPoints, 0),
-    pfComprovantes: config.pfComprovantes.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pfComprovantes")).reduce((s, c) => s + c.maxPoints, 0),
-    pj: config.pj.reduce((s, c) => s + c.maxPoints, 0) + config.customCriteria.filter(c => c.applicableTo.includes("pj")).reduce((s, c) => s + c.maxPoints, 0),
+    pfIrpf: config.pfIrpf.reduce((s, c) => s + c.maxPoints, 0),
+    pj: config.pj.reduce((s, c) => s + c.maxPoints, 0),
   }), [config]);
   const invalidTotals = Object.values(totals).some((total) => total !== 1000);
 
@@ -471,28 +369,24 @@ export default function Configuracoes() {
       </div>
 
       <div className="container mx-auto max-w-5xl px-6 py-6 space-y-8">
-        {/* SECTION 1 & 2: Criteria by tab */}
+        {/* SECTION 1: Criteria by tab */}
         <Tabs defaultValue="pfIrpf">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="pfIrpf">Pessoa Física (IRPF)</TabsTrigger>
-            <TabsTrigger value="pfComprovantes">Pessoa Física (Comprovantes)</TabsTrigger>
             <TabsTrigger value="pj">Pessoa Jurídica</TabsTrigger>
           </TabsList>
 
-          {(["pfIrpf", "pfComprovantes", "pj"] as const).map((tab) => (
+          {(["pfIrpf", "pj"] as const).map((tab) => (
             <TabsContent key={tab} value={tab} className="mt-4">
               <CriteriaEditor
                 criteria={config[tab]}
                 onChange={(c) => setConfig(prev => ({ ...prev, [tab]: c }))}
-                customCriteria={config.customCriteria}
-                onChangeCustom={(c) => setConfig(prev => ({ ...prev, customCriteria: c }))}
-                tabKey={tab}
               />
             </TabsContent>
           ))}
         </Tabs>
 
-        {/* SECTION 3: Decision Bands */}
+        {/* SECTION 2: Preset description */}
         <section className="space-y-2">
           <h2 className="text-base font-semibold text-foreground">Descrição do preset</h2>
           <Input
@@ -605,7 +499,7 @@ export default function Configuracoes() {
                   <span className="flex-1 text-sm">{cc.name}</span>
                   <span className="text-xs text-muted-foreground">
                     {cc.calcType === "boolean" ? "Sim/Não" : "Faixas"} · {cc.maxPoints} pts ·
-                    {cc.applicableTo.map(a => a === "pfIrpf" ? " PF IRPF" : a === "pfComprovantes" ? " PF Comp." : " PJ").join(",")}
+                    {cc.applicableTo.map(a => a === "pfIrpf" ? " PF IRPF" : " PJ").join(",")}
                   </span>
                   <Button variant="ghost" size="sm" title="Editar"
                     onClick={() => { setEditingCustom(cc); setAddCustomOpen(true); }}>
@@ -620,7 +514,9 @@ export default function Configuracoes() {
             </div>
           )}
           <p className="text-xs text-muted-foreground italic">
-            Observação: Critérios customizados dependem de dados que a IA consiga extrair dos documentos.
+            <AlertTriangle className="mr-1 inline h-3 w-3" />
+            Critérios customizados ainda NÃO são aplicados no cálculo do score — funcionam como anotação da política.
+            Por isso não entram na soma de 1000 pontos das abas acima.
           </p>
         </section>
 

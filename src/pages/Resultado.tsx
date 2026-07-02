@@ -8,9 +8,14 @@ import { Label } from "@/components/ui/label";
 import { FileText, Download, SlidersHorizontal } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { useEffect, useRef, useState } from "react";
-import { scorePF, scorePJ, type ScoringResult } from "@/lib/creditScoring";
+import { scorePF, scorePJ, decideFromScore, type ScoringResult } from "@/lib/creditScoring";
 import { generateAnalysis } from "@/lib/reportAnalysis";
 import { saveHistoryResult, updateHistoryResult } from "@/lib/historyService";
+import { getScoringConfig } from "@/lib/scoringConfigService";
+
+// Limite do ajuste manual: evita que uma reprovação vire aprovação com um
+// clique sem passar por nova análise (o score total vai de 0 a 1000).
+const MAX_MANUAL_ADJUST = 200;
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
@@ -38,7 +43,9 @@ const Resultado = () => {
 
   const extractedData = location.state?.extractedData as Record<string, any> | undefined;
   const tipo = (location.state?.tipo as string) || "pf";
+  const clienteId = (location.state?.clienteId as string | null | undefined) ?? null;
   const formData = location.state?.formData as { valor: number; prazo: number; finalidade: string } | undefined;
+  const scoredRef = useRef(false);
 
   useEffect(() => {
     if (location.state?.fromHistory) {
@@ -46,19 +53,38 @@ const Resultado = () => {
       return;
     }
     if (!extractedData || !formData) return;
-    let r: ScoringResult | null = null;
-    if (tipo === "pf") {
-      r = scorePF(extractedData, formData.valor, formData.prazo, formData.finalidade);
-    } else if (tipo === "pj") {
-      r = scorePJ(extractedData, formData.valor, formData.prazo, formData.finalidade);
-    }
-    if (r) {
-      setResult(r);
-      saveHistoryResult(r).catch((e) => {
+    if (scoredRef.current) return;
+    scoredRef.current = true;
+
+    (async () => {
+      // Garante que o cálculo usa a config salva no banco (não o cache local
+      // possivelmente desatualizado desta máquina). Em caso de falha de rede,
+      // segue com o cache local — melhor do que bloquear a análise.
+      try {
+        await getScoringConfig();
+      } catch (e) {
+        console.warn("Config do banco indisponível; usando cache local.", e);
+      }
+
+      let r: ScoringResult | null = null;
+      if (tipo === "pf") {
+        r = scorePF(extractedData, formData.valor, formData.prazo, formData.finalidade, clienteId);
+      } else if (tipo === "pj") {
+        r = scorePJ(extractedData, formData.valor, formData.prazo, formData.finalidade, clienteId);
+      }
+      if (!r) return;
+      try {
+        const id = await saveHistoryResult(r);
+        r = { ...r, id };
+        // Substitui o state da navegação: um refresh reexibe a análise salva
+        // em vez de recalcular e duplicar o registro com novo protocolo.
+        navigate("/resultado", { replace: true, state: { fromHistory: r } });
+      } catch (e) {
         console.error(e);
         toast.error("Falha ao salvar análise no histórico.");
-      });
-    }
+      }
+      setResult(r);
+    })();
   }, []);
 
   // Auto-export when coming from history with autoExport flag
@@ -100,12 +126,20 @@ const Resultado = () => {
       toast.error("Informe a justificativa do ajuste manual.");
       return;
     }
+    if (Math.abs(adjustPoints) > MAX_MANUAL_ADJUST) {
+      toast.error(`O ajuste manual é limitado a ±${MAX_MANUAL_ADJUST} pontos. Acima disso, refaça a análise.`);
+      return;
+    }
     const originalScore = result.originalScore ?? result.score;
     const score = Math.max(0, Math.min(1000, originalScore + adjustPoints));
+    // A decisão acompanha o novo score — senão o badge exibiria a banda antiga
+    const { decision, decisionColor } = decideFromScore(score, result.insufficientData);
     const next = {
       ...result,
       originalScore,
       score,
+      decision,
+      decisionColor,
       manualAdjustment: { points: adjustPoints, justification: adjustJustification.trim(), adjustedAt: new Date().toISOString() },
     };
     try {

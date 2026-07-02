@@ -1,4 +1,11 @@
 // Scoring Configuration System — manages all adjustable parameters
+//
+// Versionamento: CONFIG_VERSION marca configs cujas FAIXAS (ranges) foram
+// salvas já com o motor aplicando-as de fato. Configs antigas (sem versão)
+// tinham faixas meramente decorativas — ao carregar, as faixas padrão atuais
+// substituem as salvas, preservando apenas pesos, bandas e parâmetros.
+
+export const CONFIG_VERSION = 2;
 
 export interface CriterionRange {
   label: string;
@@ -16,7 +23,7 @@ export interface CriterionConfig {
 
 export interface CustomCriterion extends CriterionConfig {
   calcType: "boolean" | "ranges";
-  applicableTo: ("pfIrpf" | "pfComprovantes" | "pj")[];
+  applicableTo: ("pfIrpf" | "pj")[];
   referenceField: string;
 }
 
@@ -35,9 +42,9 @@ export interface FinancialParams {
 }
 
 export interface ScoringConfig {
+  configVersion?: number;
   descricao?: string;
   pfIrpf: CriterionConfig[];
-  pfComprovantes: CriterionConfig[];
   pj: CriterionConfig[];
   decisionBands: DecisionBand[];
   financialParams: FinancialParams;
@@ -45,17 +52,20 @@ export interface ScoringConfig {
 }
 
 const STORAGE_KEY = "scoring_config";
-const PASSWORD_KEY = "admin_password";
 
 export const DEFAULT_CONFIG: ScoringConfig = {
+  configVersion: CONFIG_VERSION,
   pfIrpf: [
     {
+      // Faixas em % da renda mensal comprometida pela parcela estimada.
+      // Zera acima de 45% (referência: regra 28/36; BCB monitora >50% como
+      // superendividamento — 45% mantém margem prudencial).
       id: "pf_comprometimento", name: "Comprometimento de Renda", maxPoints: 250,
       ranges: [
         { label: "Excelente", min: 0, max: 25, percentage: 100 },
         { label: "Bom", min: 25, max: 35, percentage: 72 },
-        { label: "Regular", min: 35, max: 50, percentage: 36 },
-        { label: "Crítico", min: 50, max: 100, percentage: 0 },
+        { label: "Regular", min: 35, max: 45, percentage: 36 },
+        { label: "Crítico", min: 45, max: 100, percentage: 0 },
       ],
     },
     {
@@ -111,70 +121,9 @@ export const DEFAULT_CONFIG: ScoringConfig = {
       ],
     },
   ],
-  pfComprovantes: [
-    {
-      id: "pfc_comprometimento", name: "Comprometimento de Renda", maxPoints: 250,
-      ranges: [
-        { label: "Excelente", min: 0, max: 25, percentage: 100 },
-        { label: "Bom", min: 25, max: 35, percentage: 72 },
-        { label: "Regular", min: 35, max: 50, percentage: 36 },
-        { label: "Crítico", min: 50, max: 100, percentage: 0 },
-      ],
-    },
-    {
-      id: "pfc_estabilidade", name: "Estabilidade de Renda", maxPoints: 200,
-      ranges: [
-        { label: "Instável", min: 0, max: 1, percentage: 0 },
-        { label: "Razoável", min: 1, max: 2, percentage: 50 },
-        { label: "Estável", min: 2, max: 100, percentage: 100 },
-      ],
-    },
-    {
-      id: "pfc_patrimonio", name: "Patrimônio Declarado", maxPoints: 150,
-      ranges: [
-        { label: "Crítico", min: 0, max: 50, percentage: 7 },
-        { label: "Baixo", min: 50, max: 100, percentage: 33 },
-        { label: "Adequado", min: 100, max: 200, percentage: 67 },
-        { label: "Excelente", min: 200, max: 1000, percentage: 100 },
-      ],
-    },
-    {
-      id: "pfc_endividamento", name: "Endividamento", maxPoints: 150,
-      ranges: [
-        { label: "Sem dívidas", min: 0, max: 0.1, percentage: 100 },
-        { label: "Baixo", min: 0.1, max: 30, percentage: 67 },
-        { label: "Moderado", min: 30, max: 60, percentage: 33 },
-        { label: "Alto", min: 60, max: 100, percentage: 0 },
-      ],
-    },
-    {
-      id: "pfc_tempo_emprego", name: "Tempo de Emprego", maxPoints: 100,
-      ranges: [
-        { label: "<1 ano", min: 0, max: 1, percentage: 10 },
-        { label: "1-3 anos", min: 1, max: 3, percentage: 40 },
-        { label: "3-5 anos", min: 3, max: 5, percentage: 70 },
-        { label: ">5 anos", min: 5, max: 100, percentage: 100 },
-      ],
-    },
-    {
-      id: "pfc_bens_reais", name: "Posse de Bens Reais", maxPoints: 100,
-      ranges: [
-        { label: "Nenhum", min: 0, max: 1, percentage: 0 },
-        { label: "Veículo", min: 1, max: 2, percentage: 40 },
-        { label: "Imóvel", min: 2, max: 3, percentage: 60 },
-        { label: "Imóvel + Veículo", min: 3, max: 4, percentage: 100 },
-      ],
-    },
-    {
-      id: "pfc_referencias", name: "Referências Bancárias", maxPoints: 50,
-      ranges: [
-        { label: "Nenhuma", min: 0, max: 1, percentage: 0 },
-        { label: "Possui", min: 1, max: 2, percentage: 100 },
-      ],
-    },
-  ],
   pj: [
     {
+      // Faixas em % (liquidez corrente × 100): 150 = LC 1,5
       id: "pj_liquidez", name: "Liquidez Corrente", maxPoints: 150,
       ranges: [
         { label: "Crítica", min: 0, max: 100, percentage: 0 },
@@ -203,12 +152,14 @@ export const DEFAULT_CONFIG: ScoringConfig = {
       ],
     },
     {
+      // Zera acima de 70% do ativo total (referência: índices setoriais
+      // Serasa Experian; >70% indica estrutura de capital comprometida).
       id: "pj_endividamento", name: "Endividamento", maxPoints: 150,
       ranges: [
         { label: "Baixo", min: 0, max: 40, percentage: 100 },
         { label: "Moderado", min: 40, max: 60, percentage: 67 },
-        { label: "Alto", min: 60, max: 80, percentage: 27 },
-        { label: "Crítico", min: 80, max: 100, percentage: 0 },
+        { label: "Alto", min: 60, max: 70, percentage: 27 },
+        { label: "Crítico", min: 70, max: 100, percentage: 0 },
       ],
     },
     {
@@ -271,24 +222,51 @@ export const DEFAULT_CONFIG: ScoringConfig = {
   customCriteria: [],
 };
 
-const mergeCriteria = (defaults: CriterionConfig[], saved?: CriterionConfig[]) => {
+const mergeCriteria = (
+  defaults: CriterionConfig[],
+  saved: CriterionConfig[] | undefined,
+  keepSavedRanges: boolean,
+) => {
   if (!Array.isArray(saved)) return structuredClone(defaults);
   const savedById = new Map(saved.map((c) => [c.id, c]));
-  const merged = defaults.map((def) => ({ ...def, ...(savedById.get(def.id) || {}) }));
-  const customSaved = saved.filter((c) => !defaults.some((def) => def.id === c.id));
-  return [...merged, ...customSaved];
+  // Critérios desconhecidos salvos são descartados: o motor não os calcula e
+  // eles distorceriam a validação da soma de 1000 pontos.
+  return defaults.map((def) => {
+    const s = savedById.get(def.id);
+    if (!s) return structuredClone(def);
+    return {
+      ...structuredClone(def),
+      maxPoints: typeof s.maxPoints === "number" ? s.maxPoints : def.maxPoints,
+      ranges: keepSavedRanges && Array.isArray(s.ranges) && s.ranges.length > 0
+        ? structuredClone(s.ranges)
+        : structuredClone(def.ranges),
+    };
+  });
 };
 
-const normalizeConfig = (parsed: Partial<ScoringConfig>): ScoringConfig => ({
-  ...DEFAULT_CONFIG,
-  ...parsed,
-  pfIrpf: mergeCriteria(DEFAULT_CONFIG.pfIrpf, parsed.pfIrpf),
-  pfComprovantes: mergeCriteria(DEFAULT_CONFIG.pfComprovantes, parsed.pfComprovantes),
-  pj: mergeCriteria(DEFAULT_CONFIG.pj, parsed.pj),
-  decisionBands: parsed.decisionBands || structuredClone(DEFAULT_CONFIG.decisionBands),
-  financialParams: { ...DEFAULT_CONFIG.financialParams, ...(parsed.financialParams || {}) },
-  customCriteria: parsed.customCriteria || [],
-});
+const normalizeCustom = (saved: unknown): CustomCriterion[] => {
+  if (!Array.isArray(saved)) return [];
+  return (saved as CustomCriterion[]).map((c) => ({
+    ...c,
+    applicableTo: (c.applicableTo || []).filter(
+      (k): k is "pfIrpf" | "pj" => k === "pfIrpf" || k === "pj",
+    ),
+  }));
+};
+
+const normalizeConfig = (parsed: Partial<ScoringConfig>): ScoringConfig => {
+  const keepSavedRanges = (parsed.configVersion ?? 1) >= CONFIG_VERSION;
+  return {
+    ...DEFAULT_CONFIG,
+    ...parsed,
+    configVersion: CONFIG_VERSION,
+    pfIrpf: mergeCriteria(DEFAULT_CONFIG.pfIrpf, parsed.pfIrpf, keepSavedRanges),
+    pj: mergeCriteria(DEFAULT_CONFIG.pj, parsed.pj, keepSavedRanges),
+    decisionBands: parsed.decisionBands || structuredClone(DEFAULT_CONFIG.decisionBands),
+    financialParams: { ...DEFAULT_CONFIG.financialParams, ...(parsed.financialParams || {}) },
+    customCriteria: normalizeCustom(parsed.customCriteria),
+  };
+};
 
 export function loadConfig(): ScoringConfig {
   try {
@@ -302,7 +280,7 @@ export function loadConfig(): ScoringConfig {
 }
 
 export function saveConfig(config: ScoringConfig): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...config, configVersion: CONFIG_VERSION }));
 }
 
 export function resetConfig(): void {
@@ -310,7 +288,7 @@ export function resetConfig(): void {
 }
 
 export function exportConfig(config: ScoringConfig): void {
-  const payload = { descricao: config.descricao || "Preset de pontuação POSSIBLE", ...config };
+  const payload = { descricao: config.descricao || "Preset de pontuação POSSIBLE", ...config, configVersion: CONFIG_VERSION };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -338,23 +316,6 @@ export function importConfig(file: File): Promise<ScoringConfig> {
   });
 }
 
-export function getAdminPassword(): string {
-  return localStorage.getItem(PASSWORD_KEY) || "12345678";
-}
-
-export function setAdminPassword(pwd: string): void {
-  localStorage.setItem(PASSWORD_KEY, pwd);
-}
-
-export function isConfigAuthenticated(): boolean {
-  return sessionStorage.getItem("config_auth") === "true";
-}
-
-export function setConfigAuthenticated(v: boolean): void {
-  if (v) sessionStorage.setItem("config_auth", "true");
-  else sessionStorage.removeItem("config_auth");
-}
-
 /** Find matching range for a metric value and return points */
 export function applyRanges(metricValue: number, criterion: CriterionConfig): number {
   for (const range of criterion.ranges) {
@@ -368,6 +329,33 @@ export function applyRanges(metricValue: number, criterion: CriterionConfig): nu
     return Math.round(criterion.maxPoints * last.percentage / 100);
   }
   return 0;
+}
+
+/**
+ * Avalia um valor de métrica contra as faixas configuradas do critério.
+ * O valor é limitado ao intervalo coberto pelas faixas (evita "cair fora"
+ * quando o indicador extrapola, ex.: patrimônio 15x a renda).
+ */
+export function evalRanges(
+  criterion: CriterionConfig,
+  metricValue: number,
+): { points: number; label: string } {
+  const sorted = [...criterion.ranges].sort((a, b) => a.min - b.min);
+  if (sorted.length === 0) return { points: 0, label: "" };
+  const lo = sorted[0].min;
+  const hi = sorted[sorted.length - 1].max;
+  const v = Math.min(Math.max(metricValue, lo), hi);
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i];
+    const isLast = i === sorted.length - 1;
+    if ((v >= r.min && v < r.max) || (isLast && v >= r.min && v <= r.max)) {
+      return {
+        points: Math.round(criterion.maxPoints * r.percentage / 100),
+        label: r.label,
+      };
+    }
+  }
+  return { points: 0, label: "" };
 }
 
 /** Validate ranges have no gaps */

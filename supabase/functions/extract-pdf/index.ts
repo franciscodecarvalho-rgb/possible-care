@@ -18,6 +18,28 @@ serve(async (req) => {
       });
     }
 
+    // Limites de payload: contém abuso de créditos de IA e requisições malformadas
+    const MAX_IMAGES = 40;
+    const MAX_IMAGE_CHARS = 4_000_000; // ~3 MB por página em base64
+    if (images.length > MAX_IMAGES) {
+      return new Response(JSON.stringify({ error: `Máximo de ${MAX_IMAGES} páginas por análise.` }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (images.some((img: unknown) => typeof img !== "string" || img.length === 0 || img.length > MAX_IMAGE_CHARS)) {
+      return new Response(JSON.stringify({ error: "Imagem inválida ou grande demais." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (typeof promptText !== "string" || promptText.length === 0 || promptText.length > 20_000) {
+      return new Response(JSON.stringify({ error: "Prompt inválido." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");

@@ -6,6 +6,7 @@ export const MIGRATION_DONE_KEY = "credit_history_migration_done";
 
 type AnaliseRow = {
   id?: string;
+  cliente_id: string | null;
   protocolo: string;
   tipo: string;
   pj_doc_type: string | null;
@@ -23,6 +24,7 @@ type AnaliseRow = {
 };
 
 const toRow = (r: ScoringResult, userId: string | null): AnaliseRow => ({
+  cliente_id: r.clienteId ?? null,
   protocolo: r.protocolo,
   tipo: r.tipo,
   pj_doc_type: r.pjDocType ?? null,
@@ -40,6 +42,8 @@ const toRow = (r: ScoringResult, userId: string | null): AnaliseRow => ({
 });
 
 const fromRow = (row: any): ScoringResult => ({
+  id: row.id,
+  clienteId: row.cliente_id ?? null,
   protocolo: row.protocolo,
   tipo: row.tipo,
   pjDocType: row.pj_doc_type ?? undefined,
@@ -72,24 +76,30 @@ export const loadHistory = async (): Promise<ScoringResult[]> => {
   return (data ?? []).map(fromRow);
 };
 
-export const saveHistoryResult = async (result: ScoringResult): Promise<void> => {
+/** Salva a análise e devolve o id da linha criada (chave estável p/ updates). */
+export const saveHistoryResult = async (result: ScoringResult): Promise<string> => {
   const userId = await getUserId();
   if (!userId) throw new Error("Usuário não autenticado");
   const row = toRow(result, userId);
-  const { error } = await supabase.from("analises").insert(row);
+  const { data, error } = await supabase
+    .from("analises")
+    .insert(row)
+    .select("id")
+    .single();
   if (error) {
     console.error("Erro ao salvar análise:", error);
     throw error;
   }
+  return (data as any).id as string;
 };
 
 export const updateHistoryResult = async (result: ScoringResult): Promise<void> => {
   const row = toRow(result, null);
-  const { created_by: _omit, ...rest } = row;
-  const { error } = await supabase
-    .from("analises")
-    .update(rest)
-    .eq("protocolo", result.protocolo);
+  const { created_by: _omit, id: _id, ...rest } = row;
+  // Atualiza pelo id (uuid) quando disponível; protocolo é só fallback legado
+  let query = supabase.from("analises").update(rest);
+  query = result.id ? query.eq("id", result.id) : query.eq("protocolo", result.protocolo);
+  const { error } = await query;
   if (error) {
     console.error("Erro ao atualizar análise:", error);
     throw error;
